@@ -119,7 +119,7 @@ async def generate_assessment(session_id: str) -> dict:
             {
                 "role": "system",
                 "content": (
-                    "You are an expert evaluator for Cuemath's tutor hiring team. "
+                    "You are an expert educator evaluator. "
                     "You always respond with valid JSON only. No extra text, no markdown fences."
                 ),
             },

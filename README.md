@@ -1,5 +1,5 @@
-# Cuemath AI Tutor Screener
-## Strategic Talent Evaluation via Generative Intelligence
+# AI Tutor Screener
+## Adaptive Voice Interview System for Educator Assessment
 
 > A production-grade, voice-first screening engine designed to evaluate tutor pedagogy, communication, and instructional warmth through high-fidelity adaptive conversation.
 
@@ -16,7 +16,7 @@
 
 ## What It Does
 
-A candidate visits the interview page, enters their name, and has a **5–7 minute voice conversation** with **Sarah**, Cuemath's AI Interviewer. Sarah listens, adapts her questions based on what the candidate says, and produces a detailed assessment report at the end.
+A candidate visits the interview page, enters their name, and has a **5–7 minute voice conversation** with **Sarah**, an intelligent AI interviewer. Sarah listens, adapts her questions based on what the candidate says, and produces a detailed assessment report at the end.
 
 - 🎙️ **Voice-first** — speak naturally; Whisper transcribes accurately
 - 🧠 **Fully adaptive** — no scripted question list; LLM decides what to ask next based on the conversation
@@ -95,7 +95,7 @@ graph TD
 | **Warmth & Patience** | Genuine care and empathy for students |
 | **Ability to Simplify** | Child-friendly analogies and explanations |
 | **English Fluency** | Natural, grammatically correct speech |
-| **Candidate Fit** | Overall suitability for Cuemath tutoring |
+| **Candidate Fit** | Overall suitability for tutoring positions |
 
 Each dimension gets a score (1–10), a one-sentence justification, and a **direct quote** from the transcript as evidence.
 

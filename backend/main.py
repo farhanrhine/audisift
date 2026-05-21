@@ -74,7 +74,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
             model=WHISPER_MODEL,
             response_format="json",
             language="en",
-            prompt="The following is a voice response from a prospective Cuemath tutor during a qualitative screening interview. Important vocabulary: Cuemath, math, geometry, algebra, fractions, calculation, curriculum, pedagogy.",
+            prompt="The following is a voice response from a teaching candidate during a qualitative screening interview. Important vocabulary: teaching, education, curriculum, pedagogy, students, learning, instruction.",
         )
         text = transcription.text.strip() if transcription.text else ""
         return {"text": text}
