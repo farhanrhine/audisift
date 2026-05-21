@@ -110,12 +110,12 @@ body {
 h1, h2, .font-display { 
   font-family: var(--font-display); 
   font-weight: 400; 
-  letter-spacing: -0.02em; 
+  letter-spacing: -0.03em; 
 }
-h1 { font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1.1; }
-h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.2; }
-h3 { font-size: 1.4rem; font-weight: 400; }
-p  { color: var(--ink-soft); }
+h1 { font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1.1; font-weight: 500; color: var(--ink); }
+h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.2; font-weight: 500; }
+h3 { font-size: 1.4rem; font-weight: 500; }
+p  { color: var(--ink-soft); line-height: 1.7; }
 
 .gradient-text {
   /* Removed gradient for premium editorial feel */
@@ -140,6 +140,7 @@ p  { color: var(--ink-soft); }
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   transition: var(--transition);
+  padding: 32px;
 }
 
 /* --- Buttons --- */
@@ -148,27 +149,28 @@ p  { color: var(--ink-soft); }
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 0.65rem 1.5rem;
-  border-radius: var(--radius-sm);
+  padding: 0.75rem 1.75rem;
+  border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   border: none;
   transition: var(--transition);
   text-decoration: none;
   white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 
 .btn-primary {
-  background: var(--ink);
-  color: var(--paper);
-}
-.btn-primary:hover:not(:disabled) {
   background: var(--accent);
   color: #fff;
+  font-weight: 700;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #d61e3f;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(229, 43, 80, 0.2);
+  box-shadow: 0 8px 24px rgba(229, 43, 80, 0.3);
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -199,20 +201,21 @@ p  { color: var(--ink-soft); }
 /* --- Inputs --- */
 .input {
   width: 100%;
-  background: var(--paper);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.8rem 1rem;
+  background: var(--paper-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.2rem;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 0.95rem;
   outline: none;
   transition: var(--transition);
 }
-.input::placeholder { color: var(--ink-faint); }
+.input::placeholder { color: var(--ink-faint); font-weight: 500; }
 .input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-light);
+  box-shadow: 0 0 0 4px var(--accent-light);
+  background: var(--paper-card);
 }
 
 /* --- Badges --- */
