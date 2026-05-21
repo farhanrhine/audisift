@@ -98,6 +98,7 @@ body {
   font-family: var(--font-body);
   background-color: var(--paper);
   color: var(--ink);
+  line-height: 1.6;
   min-height: 100vh;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;

@@ -8,13 +8,13 @@ let isRecording = false;
 let isSpeaking = false;
 let isProcessing = false;
 let questionCount = 0;
-const MAX_QUESTIONS = 7;
+const MAX_QUESTIONS = 8;
 let timerInterval = null;
 let timerSeconds = 0;
 let silenceTimer = null;
 let accumulatedTranscript = '';
 const MIC_MAX_SECONDS = 60;
-const INTERVIEW_TOTAL_SECONDS = 420;
+const INTERVIEW_TOTAL_SECONDS = 600;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
