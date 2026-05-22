@@ -422,9 +422,21 @@ async function renderReport(report, sessionId) {
     const dim = report.dimensions[key];
     if (!dim) continue;
     const sc = scoreClass(dim.score);
+    
+    // Phase 4: Show confidence level
+    const confidence = dim.confidence || 'medium';
+    const confBadge = {
+      high: '✓ High',
+      medium: '◐ Medium',
+      low: '○ Low'
+    }[confidence] || 'Medium';
 
     const card = document.createElement('div');
     card.className = 'card dim-card animate-fadeIn';
+    
+    const quoteLine = dim.evidence_quote ? `<div class="dim-quote">"${escapeHtml(dim.evidence_quote)}"</div>` : '';
+    const confLine = dim.confidence ? `<div style="font-size:0.8rem; color:var(--ink-muted); margin-top:8px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Confidence: ${confBadge}</div>` : '';
+    
     card.innerHTML = `
       <div class="dim-header">
         <div class="dim-name"><div class="dim-icon">${meta.icon}</div>${meta.label}</div>
@@ -434,7 +446,8 @@ async function renderReport(report, sessionId) {
         <div class="dim-bar-fill bar-${sc}" id="bar-${key}" style="width:0%"></div>
       </div>
       <div class="dim-justification">${dim.justification}</div>
-      <div class="dim-quote">${dim.quote}</div>
+      ${confLine}
+      ${quoteLine}
     `;
     grid.appendChild(card);
 
@@ -443,6 +456,14 @@ async function renderReport(report, sessionId) {
       const bar = document.getElementById(`bar-${key}`);
       if (bar) bar.style.width = `${dim.score * 10}%`;
     }, 300);
+  }
+  
+  // Phase 4: Display flags if present
+  if (report.flags && report.flags.length > 0) {
+    const flagsNote = document.createElement('div');
+    flagsNote.style.cssText = 'padding:16px 24px; background:rgba(184,115,51,0.1); border:1px solid rgba(184,115,51,0.2); border-radius:var(--radius-md); margin-bottom:24px; color:var(--accent-amber);';
+    flagsNote.innerHTML = `<strong>⚠️ Assessment Flags:</strong> ${report.flags.join(', ')}`;
+    document.getElementById('dimensions-grid').parentElement.insertBefore(flagsNote, document.getElementById('dimensions-grid'));
   }
 
   // Transcript

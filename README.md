@@ -76,14 +76,57 @@ graph TD
 
 | Layer | Technology |
 |---|---|
-| **Backend** | FastAPI (Python 3.11) + SQLite (Stateless production architecture) |
+| **Backend** | FastAPI (Python 3.11) + SQLAlchemy ORM + SQLite/PostgreSQL (Async) |
 | **Package Manager** | `uv` |
 | **Conversation LLM** | `openai/gpt-oss-120b` via Groq (Optimized for latent voice personality) |
 | **Assessment LLM** | `llama-3.3-70b-versatile` via Groq (High-rigor reasoning & scoring) |
-| **Voice Transcription** | Groq Whisper `whisper-large-v3-turbo` (Prompt-guided context) |
+| **Voice Transcription** | Groq Whisper `whisper-large-v3-turbo` + Real-time WebSocket streaming |
 | **Live Preview STT** | Web Speech API (Chrome/Edge parallel track) |
+| **Real-Time Transcription** | WebSocket (`/ws/transcribe/{session_id}`) with binary audio chunking |
+| **Rate Limiting** | `slowapi` — Per-IP request throttling (10/min sessions, 5/min transcribe) |
+| **Authentication** | `fastapi-users` with JWT tokens (24-hour expiry) |
+| **Email Notifications** | Python `smtplib` + HTML templates (Assessment complete, Bulk links) |
 | **Frontend** | Modular ES6 Modules + Vanilla CSS (Editorial Parchment Theme) |
 | **Deployment** | Render.com (Optimized for stateless horizontal scaling) |
+
+---
+
+---
+
+## New Features & Capabilities
+
+### 🔊 Real-Time Transcription
+- **WebSocket Streaming:** `/ws/transcribe/{session_id}` accepts binary audio chunks
+- **Live Updates:** Candidate sees interim transcription as they speak
+- **Fallback:** Automatic Web Speech API fallback if WebSocket unavailable
+- **250ms Chunking:** Audio buffered and transcribed every 2 seconds for responsiveness
+
+### 🛡️ Production Hardening
+- **Rate Limiting:** 10/min on `/api/session/message`, 5/min on `/api/transcribe` (per IP)
+- **Health Checks:** Enhanced `/api/health` verifies database connectivity + system timestamp
+- **Session Cleanup:** Background task every 10 minutes marks idle sessions (30+ min) as "abandoned"
+- **Graceful Timeouts:** All async operations have timeouts to prevent hanging connections
+
+### 📧 Notifications & Bulk Links
+- **Email Notifications:** Assessment complete triggers email to candidate with score + report link
+- **Bulk Link Generation:** Recruiters generate 1–1000 unique interview tokens in batch
+- **Usage Tracking:** Each token tracked: when created, when used, by whom
+- **Recruiter Dashboard:** `/api/interviews/bulk-links` shows all generated links with stats
+- **HTML Templates:** Professional styled emails with call-to-action buttons
+
+### 🔐 Authentication & Admin Dashboard
+- **JWT Authentication:** 24-hour token expiry, secure recruiter login
+- **Role-Based Access:** Separate recruiter and admin permissions
+- **Session Management:** Track all interviews, filter by score, date, status
+- **CSV Export:** Bulk download of interview data for analysis
+- **Private Notes:** Recruiters can annotate sessions with decision context
+
+### 🎯 Intelligent Assessment Engine
+- **5-Dimension Scoring:** Communication, Warmth, Simplification, Fluency, Fit
+- **Confidence Levels:** High/Medium/Low confidence scores with evidence backing
+- **Evidence Quotes:** Every score includes a direct transcript excerpt for audit trail
+- **Data Quality Flags:** Automatic detection of zero data, insufficient responses, off-topic patterns
+- **Adaptive Rubrics:** 4-band scoring (1-3, 4-6, 7-8, 9-10) for consistent calibration
 
 ---
 
@@ -154,6 +197,7 @@ cp backend/.env.example backend/.env
 Edit `backend/.env`:
 
 ```env
+# Groq API (required)
 GROQ_API_KEY=your_groq_api_key_here
 
 # All three models are served via Groq — one API key handles everything
@@ -161,7 +205,18 @@ CONVERSATION_MODEL=openai/gpt-oss-120b
 ASSESSMENT_MODEL=llama-3.3-70b-versatile
 WHISPER_MODEL=whisper-large-v3-turbo
 
+# Database (default: SQLite for local dev, PostgreSQL for production)
 DATABASE_URL=./screener.db
+# DATABASE_URL=postgresql+asyncpg://user:password@localhost/screener  # Production
+
+# Email notifications (optional, graceful fallback if not set)
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USER=your_email@gmail.com
+# SMTP_PASSWORD=your_app_password
+
+# Error tracking (optional)
+# SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 ```
 
 ### 3. Run
@@ -172,6 +227,17 @@ uv run uvicorn main:app --reload
 ```
 
 Open **http://localhost:8000** in Chrome or Edge.
+
+#### Optional: Enable Email Notifications
+Set the SMTP environment variables in `backend/.env` to enable assessment completion emails:
+```bash
+export SMTP_HOST=smtp.gmail.com
+export SMTP_PORT=587
+export SMTP_USER=your_email@gmail.com
+export SMTP_PASSWORD=your_app_password
+```
+
+Without these, the email service silently skips notification sending (no errors).
 
 ---
 
@@ -220,12 +286,70 @@ The frontend is intentionally built using **Pure Vanilla JS** and **Vanilla CSS*
 - **Free-Tier Optimized:** By avoiding a complex Node.js build step (like `next build`), the project stays extremely lightweight—critical for high reliability and fast cold-starts on Render.com's free tier.
 - **Sustainability:** Uses native ES6 modules and CSS variables, ensuring the codebase is easy to maintain and future-proof without the version-locked dependencies often found in framework ecosystems.
 
-### Assessment transcript cleaning & Integrity
+---
+
+## API Reference
+
+### Public Endpoints (No Auth Required)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/session/start` | POST | Start new interview session |
+| `/api/session/message` | POST | Send candidate message + get next question |
+| `/api/transcribe` | POST | Transcribe audio file to text |
+| `/ws/transcribe/{session_id}` | WebSocket | Real-time binary audio streaming with interim/final transcriptions |
+| `/api/session/report/{session_id}` | GET | Poll for assessment report (returns `{status: "generating"|"ready", report: {...}}`) |
+| `/api/session/history/{session_id}` | GET | Get interview transcript |
+
+### Protected Endpoints (Recruiter/Admin Auth Required)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/stats` | GET | Overview: total sessions, avg score, pass rate |
+| `/api/sessions` | GET | List all sessions with filtering/pagination |
+| `/api/sessions/{id}` | GET | Single session details |
+| `/api/sessions/{id}/report` | GET | Get assessment report for session |
+| `/api/sessions/{id}/notes` | POST/GET | Add/retrieve private recruiter notes |
+| `/api/sessions/export/csv` | GET | Export all sessions to CSV |
+| `/api/interviews/bulk-generate` | POST | Generate 1-1000 unique interview tokens in batch |
+| `/api/interviews/bulk-links` | GET | List all generated bulk links with usage stats |
+| `/api/health` | GET | System health (DB connectivity, timestamp) |
+
+---
+
+## Database Schema (Phase 1)
+
+| Model | Purpose | Key Fields |
+|-------|---------|-----------|
+| `User` | Recruiter/admin accounts | id, email, hashed_password, role, is_active |
+| `Organization` | Company context | id, name, created_at |
+| `Session` | Interview session | id, candidate_name, status, state (JSON), created_at, completed_at |
+| `Message` | Conversation history | id, session_id, role, content, timestamp |
+| `Assessment` | Evaluation report | id, session_id, report_json (full 5-dim score), recommendation, overall_score |
+| `SessionNote` | Private recruiter notes | id, session_id, created_by_id, content |
+| `BulkLink` | Bulk-generated interview tokens | id, token (unique), batch_label, created_by_id, session_id (used?), created_at, used_at |
+
+### Assessment Prompt Architecture (Phase 4)
+All prompts follow a **modular, single-job** philosophy:
+- `SARAH_SYSTEM` — Core persona injected as system message (max 2-3 sentences per response)
+- `QUESTION_PROMPT` — Generates ONE natural follow-up question based on dimension + last answer
+- `PROBE_PROMPT` — Surgical 1-2 sentence follow-up for insufficient/vague answers
+- `REDIRECT_PROMPT` — Warm redirect for off-topic answers
+- `DONT_KNOW_PROMPT` — Graceful pivot after "I don't know" twice
+- `ASSESSMENT_PROMPT` — Structured evaluation with 5-dimension rubrics, confidence levels, evidence quotes, flags
+- `build_rubric_string()` — Dynamically formats rubrics into prompt injection (no hardcoded scoring anchors)
+
+**Philosophy:** "Code owns decisions, LLM only generates words" — no routing or branching logic inside prompts.
+
+### Assessment Transcript Cleaning & Integrity
 Before sending to the assessment LLM, the transcript is cleaned:
 - `[Candidate chose to end interview early]` markers removed
 - Repeat requests (`"can you repeat that?"`) filtered out
 - **Zero-Data Guardrail:** If the transcript contains no substantive candidate response, the system triggers an automatic fail without calling the LLM to prevent hallucinations.
 - **Data Sufficiency Check:** Minimum word count and turn-count checks ensure the LLM has evidence before scoring.
+- **Flags Array:** Data quality issues tracked: `zero_data_detected`, `insufficient_data`, `limited_transcript`, `assessment_parsing_error`, `off_topic_heavy`
+- **Confidence Levels:** Each dimension gets `high|medium|low` confidence based on evidence strength
+- **Evidence Quotes:** Every score backed by a direct transcript quote for auditability
 
 ---
 

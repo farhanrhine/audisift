@@ -181,6 +181,27 @@
         <h2 class="font-display">All Interviews</h2>
         <span id="table-count" class="table-count"></span>
       </div>
+
+      <!-- Filters -->
+      <div style="padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+        <input type="text" id="search-input" placeholder="Search by name or email..." style="flex:1; min-width:200px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm); font-size:0.9rem;">
+        
+        <select id="recommendation-filter" style="padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm); font-size:0.9rem;">
+          <option value="">All Recommendations</option>
+          <option value="Move to next round">✓ Move Forward</option>
+          <option value="Consider with reservations">⚠ Reservations</option>
+          <option value="Do not move forward">✗ Do Not Move</option>
+        </select>
+
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem; color:var(--ink-soft);">
+          Score: <input type="number" id="score-min" placeholder="Min" min="0" max="10" style="width:50px; padding:6px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm);">
+          to <input type="number" id="score-max" placeholder="Max" min="0" max="10" style="width:50px; padding:6px; margin-left:4px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm);">
+        </label>
+
+        <button onclick="applyFilters()" class="btn btn-primary" style="padding:8px 16px; font-size:0.9rem;">Filter</button>
+        <button onclick="clearFilters()" class="btn btn-ghost" style="padding:8px 16px; font-size:0.9rem;">Clear</button>
+        <button onclick="exportCSV()" class="btn btn-secondary" style="padding:8px 16px; font-size:0.9rem;">📥 Export CSV</button>
+      </div>
       <div id="table-body">
         <!-- Loading skeletons -->
         <div style="padding:24px 28px; display:flex; flex-direction:column; gap:16px">
@@ -195,35 +216,53 @@
 </div>
 
 <script>
-async function loadDashboard() {
+async function loadStats() {
   try {
-    const res = await fetch('/api/dashboard');
+    const res = await fetch('/api/stats');
+    if (!res.ok) throw new Error('Failed to load stats');
     const data = await res.json();
 
-    // Stats
-    document.getElementById('stat-total').textContent = data.stats.total_interviews;
-    document.getElementById('stat-avg').textContent   = data.stats.avg_score || '—';
-    document.getElementById('stat-pass').textContent  = data.stats.total_interviews > 0
-      ? `${data.stats.pass_rate}%`
+    document.getElementById('stat-total').textContent = data.total_interviews;
+    document.getElementById('stat-avg').textContent   = data.avg_score || '—';
+    document.getElementById('stat-pass').textContent  = data.total_interviews > 0
+      ? `${data.pass_rate}%`
       : '—';
+  } catch (err) {
+    console.error('Stats error:', err);
+  }
+}
+
+let currentFilters = {};
+
+async function loadSessions() {
+  try {
+    const params = new URLSearchParams();
+    if (currentFilters.search) params.append('search', currentFilters.search);
+    if (currentFilters.recommendation) params.append('recommendation', currentFilters.recommendation);
+    if (currentFilters.score_min) params.append('score_min', currentFilters.score_min);
+    if (currentFilters.score_max) params.append('score_max', currentFilters.score_max);
+    params.append('limit', 100);
+
+    const res = await fetch(`/api/sessions?${params}`);
+    if (!res.ok) throw new Error('Failed to load sessions');
+    const data = await res.json();
 
     document.getElementById('last-updated').textContent =
       'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Table
     const tableBody = document.getElementById('table-body');
-    if (data.sessions.length === 0) {
+    if (!data.sessions || data.sessions.length === 0) {
       tableBody.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" class="icon"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5M12 19v3M8 22h8"/></svg></div>
-          <h3 class="font-display">No interviews yet</h3>
-          <p style="color:var(--ink-soft); font-size:1rem; margin-top:-8px;">Start the first screening interview to see results here.</p>
-          <a href="index.html" class="btn btn-primary" style="margin-top:8px">Start Interview</a>
+          <h3 class="font-display">No interviews found</h3>
+          <p style="color:var(--ink-soft); font-size:1rem; margin-top:-8px;">Try adjusting your filters or start a new screening.</p>
         </div>`;
+      document.getElementById('table-count').textContent = '0 interviews';
       return;
     }
 
-    document.getElementById('table-count').textContent = `${data.sessions.length} interview${data.sessions.length !== 1 ? 's' : ''}`;
+    document.getElementById('table-count').textContent = `${data.total} interview${data.total !== 1 ? 's' : ''}`;
 
     const table = document.createElement('table');
     table.className = 'sessions-table';
@@ -250,7 +289,7 @@ async function loadDashboard() {
     const tbody = table.querySelector('#tbody');
     for (const s of data.sessions) {
       const initials = s.candidate_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-      const dateStr = new Date(s.start_time + 'Z').toLocaleDateString('en-GB', {
+      const dateStr = new Date(s.created_at).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric'
       });
 
@@ -303,13 +342,61 @@ async function loadDashboard() {
   }
 }
 
+function applyFilters() {
+  currentFilters = {
+    search: document.getElementById('search-input').value,
+    recommendation: document.getElementById('recommendation-filter').value,
+    score_min: document.getElementById('score-min').value,
+    score_max: document.getElementById('score-max').value,
+  };
+  loadSessions();
+}
+
+function clearFilters() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('recommendation-filter').value = '';
+  document.getElementById('score-min').value = '';
+  document.getElementById('score-max').value = '';
+  currentFilters = {};
+  loadSessions();
+}
+
+async function exportCSV() {
+  try {
+    const params = new URLSearchParams();
+    if (currentFilters.recommendation) params.append('recommendation', currentFilters.recommendation);
+    
+    const res = await fetch(`/api/sessions/export/csv?${params}`);
+    if (!res.ok) throw new Error('Export failed');
+    
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sessions_export_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  } catch (err) {
+    console.error('CSV export error:', err);
+    alert('Failed to export CSV');
+  }
+}
+
 function escapeHtml(text) {
   return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-loadDashboard();
+// Initial load
+loadStats();
+loadSessions();
+
 // Auto-refresh every 30 seconds
-setInterval(loadDashboard, 30000);
+setInterval(() => {
+  loadStats();
+  loadSessions();
+}, 30000);
 </script>
 </body>
 </html>

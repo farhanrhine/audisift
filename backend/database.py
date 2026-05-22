@@ -1,182 +1,305 @@
-import aiosqlite
-import uuid
-from datetime import datetime
-from config import DATABASE_URL
+"""Database operations using SQLAlchemy ORM."""
+
+import json
+from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import create_engine, select, update
+from sqlalchemy.pool import NullPool, StaticPool
+
+try:
+    from backend.models import Base, Session, Message, Assessment, Organization, User, SessionNote, BulkLink
+    from backend.config import DATABASE_URL
+except ImportError:
+    from models import Base, Session, Message, Assessment, Organization, User, SessionNote, BulkLink
+    from config import DATABASE_URL
+
+
+# Create async engine
+if "sqlite" in DATABASE_URL:
+    # SQLite with aiosqlite - use NullPool
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        poolclass=NullPool,
+        connect_args={"timeout": 30, "check_same_thread": False},
+    )
+else:
+    # PostgreSQL
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+    )
+
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def init_db():
-    """Create all tables on startup if they don't exist."""
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                candidate_name TEXT NOT NULL,
-                start_time TEXT NOT NULL,
-                end_time TEXT,
-                status TEXT NOT NULL DEFAULT 'in_progress',
-                exchange_count INTEGER DEFAULT 0,
-                uncovered_dimensions TEXT
-            )
-        """)
-        try:
-            # Handle migrations for existing databases
-            await db.execute("ALTER TABLE sessions ADD COLUMN exchange_count INTEGER DEFAULT 0")
-            await db.execute("ALTER TABLE sessions ADD COLUMN uncovered_dimensions TEXT")
-        except:
-            pass
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                FOREIGN KEY (session_id) REFERENCES sessions(id)
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS assessments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL UNIQUE,
-                report_json TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (session_id) REFERENCES sessions(id)
-            )
-        """)
-        await db.commit()
+    """Create all tables on startup."""
+    # For SQLite, use sync engine to avoid greenlet issues
+    if "sqlite" in DATABASE_URL:
+        sync_db_url = DATABASE_URL.replace("sqlite+aiosqlite", "sqlite")
+        sync_engine = create_engine(sync_db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        Base.metadata.create_all(sync_engine)
+        sync_engine.dispose()
+    else:
+        # For PostgreSQL, use async
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
-async def create_session(candidate_name: str) -> str:
-    """Create a new interview session and return its ID."""
-    session_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute(
-            "INSERT INTO sessions (id, candidate_name, start_time, status) VALUES (?, ?, ?, ?)",
-            (session_id, candidate_name, now, "in_progress"),
+async def get_session_obj() -> AsyncSession:
+    """Get a database session."""
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+# --------- Session Management ---------
+
+
+async def create_session(candidate_name: str, candidate_email: str = None, organization_id: str = None) -> str:
+    """Create a new interview session."""
+    async with AsyncSessionLocal() as db:
+        session = Session(
+            candidate_name=candidate_name,
+            candidate_email=candidate_email,
+            organization_id=organization_id,
+            status="in_progress",
         )
+        db.add(session)
         await db.commit()
-    return session_id
+        return session.id
 
 
-async def get_session(session_id: str) -> dict | None:
+async def get_session(session_id: str) -> Session | None:
     """Fetch a session by ID."""
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM sessions WHERE id = ?", (session_id,)
-        ) as cursor:
-            row = await cursor.fetchone()
-            return dict(row) if row else None
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Session).where(Session.id == session_id))
+        return result.scalar_one_or_none()
 
 
-async def complete_session(session_id: str):
-    """Mark a session as completed."""
-    now = datetime.utcnow().isoformat()
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute(
-            "UPDATE sessions SET status = 'completed', end_time = ? WHERE id = ?",
-            (now, session_id),
-        )
-        await db.commit()
+async def get_all_sessions(organization_id: str = None, status: str = None, limit: int = 100, offset: int = 0) -> list[Session]:
+    """Get sessions with optional filters."""
+    async with AsyncSessionLocal() as db:
+        query = select(Session)
+        if organization_id:
+            query = query.where(Session.organization_id == organization_id)
+        if status:
+            query = query.where(Session.status == status)
+        query = query.order_by(Session.created_at.desc()).limit(limit).offset(offset)
+        result = await db.execute(query)
+        return result.scalars().all()
 
 
 async def update_session_status(session_id: str, status: str):
-    """Update a session's status."""
-    async with aiosqlite.connect(DATABASE_URL) as db:
+    """Update session status."""
+    async with AsyncSessionLocal() as db:
         await db.execute(
-            "UPDATE sessions SET status = ? WHERE id = ?",
-            (status, session_id),
+            update(Session).where(Session.id == session_id).values(
+                status=status,
+                completed_at=datetime.utcnow() if status == "completed" else None
+            )
         )
         await db.commit()
 
 
-async def update_session_state(session_id: str, exchange_count: int, uncovered_dimensions: list):
-    """Update engine state for stateless connections."""
-    import json
-    async with aiosqlite.connect(DATABASE_URL) as db:
+async def update_session_state(session_id: str, exchange_count_or_state, uncovered_dimensions: list = None, interview_state: dict = None):
+    """
+    Update session state. Supports two calling patterns:
+    1. update_session_state(session_id, exchange_count, uncovered_dimensions, interview_state)
+    2. update_session_state(session_id, interview_state_dict) - new LangGraph style
+    """
+    async with AsyncSessionLocal() as db:
+        values = {}
+        
+        # Detect calling pattern
+        if isinstance(exchange_count_or_state, dict):
+            # New LangGraph style: second arg is the InterviewState dict
+            state_dict = exchange_count_or_state
+            values[Session.exchange_count] = state_dict.get("exchange_count", 0)
+            values[Session.uncovered_dimensions] = json.dumps(state_dict.get("dimensions_uncovered", []))
+            values[Session.interview_state] = json.dumps(state_dict, default=str)
+        else:
+            # Old style: second arg is exchange_count
+            exchange_count = exchange_count_or_state
+            values[Session.exchange_count] = exchange_count
+            if uncovered_dimensions:
+                values[Session.uncovered_dimensions] = json.dumps(uncovered_dimensions)
+            if interview_state:
+                values[Session.interview_state] = json.dumps(interview_state, default=str)
+        
+        await db.execute(update(Session).where(Session.id == session_id).values(**values))
+        await db.commit()
+
+
+async def complete_session(session_id: str):
+    """Mark session as completed."""
+    async with AsyncSessionLocal() as db:
         await db.execute(
-            "UPDATE sessions SET exchange_count = ?, uncovered_dimensions = ? WHERE id = ?",
-            (exchange_count, json.dumps(uncovered_dimensions), session_id),
+            update(Session).where(Session.id == session_id).values(
+                status="completed",
+                completed_at=datetime.utcnow()
+            )
         )
         await db.commit()
+
+
+async def abandon_old_sessions(minutes: int = 30):
+    """Mark sessions with no activity for X minutes as abandoned."""
+    cutoff_time = datetime.utcnow() - timedelta(minutes=minutes)
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(Session)
+            .where(
+                (Session.status == "in_progress") &
+                (Session.created_at < cutoff_time)
+            )
+            .values(status="abandoned")
+        )
+        await db.commit()
+
+
+# --------- Message Management ---------
 
 
 async def save_message(session_id: str, role: str, content: str):
-    """Save a single message (interviewer or candidate)."""
-    now = datetime.utcnow().isoformat()
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-            (session_id, role, content, now),
+    """Save a message to the session."""
+    async with AsyncSessionLocal() as db:
+        message = Message(
+            session_id=session_id,
+            role=role,
+            content=content,
         )
+        db.add(message)
         await db.commit()
 
 
 async def get_messages(session_id: str) -> list[dict]:
-    """Fetch all messages for a session, ordered by time."""
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM messages WHERE session_id = ? ORDER BY id ASC",
-            (session_id,),
-        ) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(r) for r in rows]
+    """Fetch all messages for a session."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Message).where(Message.session_id == session_id).order_by(Message.timestamp)
+        )
+        messages = result.scalars().all()
+        return [
+            {"role": m.role, "content": m.content, "timestamp": m.timestamp.isoformat()}
+            for m in messages
+        ]
 
 
-async def save_assessment(session_id: str, report_json: str):
-    """Save the final assessment report."""
-    now = datetime.utcnow().isoformat()
-    async with aiosqlite.connect(DATABASE_URL) as db:
+# --------- Assessment Management ---------
+
+
+async def save_assessment(session_id: str, report_json: str, recommendation: str = None, overall_score: int = None):
+    """Save assessment report."""
+    async with AsyncSessionLocal() as db:
+        assessment = Assessment(
+            session_id=session_id,
+            report_json=report_json,
+            recommendation=recommendation,
+            overall_score=overall_score,
+        )
+        db.add(assessment)
+        await db.commit()
+
+
+async def get_assessment(session_id: str) -> Assessment | None:
+    """Fetch assessment for a session."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Assessment).where(Assessment.session_id == session_id)
+        )
+        return result.scalar_one_or_none()
+
+
+# --------- Organization Management ---------
+
+
+async def create_organization(name: str) -> str:
+    """Create a new organization."""
+    async with AsyncSessionLocal() as db:
+        org = Organization(name=name)
+        db.add(org)
+        await db.commit()
+        return org.id
+
+
+async def get_organization(org_id: str) -> Organization | None:
+    """Fetch organization by ID."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Organization).where(Organization.id == org_id))
+        return result.scalar_one_or_none()
+
+
+# --------- Session Notes ---------
+
+
+async def add_session_note(session_id: str, author_id: str, content: str):
+    """Add a note to a session."""
+    async with AsyncSessionLocal() as db:
+        note = SessionNote(
+            session_id=session_id,
+            author_id=author_id,
+            content=content,
+        )
+        db.add(note)
+        await db.commit()
+
+
+async def get_session_notes(session_id: str) -> list[SessionNote]:
+    """Get all notes for a session."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(SessionNote)
+            .where(SessionNote.session_id == session_id)
+            .order_by(SessionNote.created_at)
+        )
+        return result.scalars().all()
+
+
+# --------- Bulk Interview Links (Phase 8) ---------
+
+
+async def create_bulk_link(token: str, batch_label: str, created_by_id: str) -> BulkLink:
+    """Create a new bulk interview link."""
+    async with AsyncSessionLocal() as db:
+        link = BulkLink(
+            token=token,
+            batch_label=batch_label,
+            created_by_id=created_by_id,
+        )
+        db.add(link)
+        await db.commit()
+        return link
+
+
+async def get_bulk_link(token: str) -> BulkLink | None:
+    """Fetch a bulk link by token."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(BulkLink).where(BulkLink.token == token)
+        )
+        return result.scalar_one_or_none()
+
+
+async def use_bulk_link(token: str, session_id: str):
+    """Mark a bulk link as used and associate with a session."""
+    async with AsyncSessionLocal() as db:
         await db.execute(
-            """INSERT INTO assessments (session_id, report_json, created_at)
-               VALUES (?, ?, ?)
-               ON CONFLICT(session_id) DO UPDATE SET report_json=excluded.report_json""",
-            (session_id, report_json, now),
+            update(BulkLink)
+            .where(BulkLink.token == token)
+            .values(session_id=session_id, used_at=datetime.utcnow())
         )
         await db.commit()
 
 
-async def get_assessment(session_id: str) -> dict | None:
-    """Fetch the assessment report for a session."""
-    import json
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM assessments WHERE session_id = ?", (session_id,)
-        ) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                return None
-            data = dict(row)
-            data["report"] = json.loads(data["report_json"])
-            return data
-
-
-async def get_all_sessions() -> list[dict]:
-    """Fetch all sessions with their assessment scores for the dashboard."""
-    import json
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("""
-            SELECT s.id, s.candidate_name, s.start_time, s.end_time, s.status,
-                   a.report_json
-            FROM sessions s
-            LEFT JOIN assessments a ON s.id = a.session_id
-            ORDER BY s.start_time DESC
-        """) as cursor:
-            rows = await cursor.fetchall()
-            result = []
-            for row in rows:
-                item = dict(row)
-                if item["report_json"]:
-                    report = json.loads(item["report_json"])
-                    item["overall_score"] = report.get("overall_score")
-                    item["recommendation"] = report.get("recommendation")
-                else:
-                    item["overall_score"] = None
-                    item["recommendation"] = None
-                del item["report_json"]
-                result.append(item)
-            return result
+async def get_bulk_links_for_user(user_id: str, limit: int = 100) -> list[BulkLink]:
+    """Get all bulk links created by a user."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(BulkLink)
+            .where(BulkLink.created_by_id == user_id)
+            .order_by(BulkLink.created_at.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()

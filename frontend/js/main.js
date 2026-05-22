@@ -179,7 +179,8 @@ function startRecording() {
       // Audio completely stopped, transcribe via Whisper
       UI.setMicRecordingUI(false);
       await _transcribeAndSend(blob);
-    }
+    },
+    sessionId  // Phase 6: Pass sessionId for WebSocket transcription
   ).catch(err => {
     console.error('Mic access denied:', err);
     isRecording = false;

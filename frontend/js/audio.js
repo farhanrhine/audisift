@@ -44,12 +44,13 @@ export function speakText(text, onStart, onEnd) {
 let mediaRecorder = null;
 let audioChunks = [];
 let recognition = null;
+let transcribeWebSocket = null;  // Phase 6: WebSocket for streaming transcription
 
 export function isAudioRecording() {
   return mediaRecorder !== null || recognition !== null;
 }
 
-export function startRecordingSession(onTranscribeText, onFinalTranscribe, onStopCallback) {
+export function startRecordingSession(onTranscribeText, onFinalTranscribe, onStopCallback, sessionId) {
   const chunks = [];
   let currentRec = null;
 
@@ -65,14 +66,61 @@ export function startRecordingSession(onTranscribeText, onFinalTranscribe, onSto
         mediaRecorder = new MediaRecorder(stream, { mimeType });
         mediaRecorder.ondataavailable = e => {
           if (e.data && e.data.size > 0) chunks.push(e.data);
+          
+          // Phase 6: Stream chunk to WebSocket if connected
+          if (transcribeWebSocket && transcribeWebSocket.readyState === WebSocket.OPEN) {
+            e.data.arrayBuffer().then(buffer => {
+              transcribeWebSocket.send(new Uint8Array(buffer));
+            });
+          }
         };
         
         mediaRecorder.onstop = () => {
             const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
             stream.getTracks().forEach(t => t.stop());
+            
+            // Phase 6: Signal end of audio to WebSocket
+            if (transcribeWebSocket && transcribeWebSocket.readyState === WebSocket.OPEN) {
+              transcribeWebSocket.send(new TextEncoder().encode('__END__'));
+            }
+            
             onStopCallback(blob);
             mediaRecorder = null;
         };
+
+        // Phase 6: Open WebSocket connection for real-time transcription
+        if (sessionId && window.location.protocol !== 'file:') {
+          const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${wsProtocol}//${window.location.host}/ws/transcribe/${sessionId}`;
+          try {
+            transcribeWebSocket = new WebSocket(wsUrl);
+            transcribeWebSocket.binaryType = 'arraybuffer';
+            
+            transcribeWebSocket.onmessage = (event) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'interim' && msg.text) {
+                  onTranscribeText(msg.text, '');  // interim update
+                } else if (msg.type === 'final' && msg.text) {
+                  onFinalTranscribe(msg.text);  // final transcription
+                }
+              } catch(e) {
+                console.warn('WebSocket message parse error:', e);
+              }
+            };
+            
+            transcribeWebSocket.onerror = (e) => {
+              console.warn('WebSocket error:', e);
+            };
+            
+            transcribeWebSocket.onclose = () => {
+              console.log('Transcription WebSocket closed');
+              transcribeWebSocket = null;
+            };
+          } catch(e) {
+            console.warn('WebSocket connection failed, falling back to Web Speech API:', e);
+          }
+        }
 
         mediaRecorder.start(250);
         
