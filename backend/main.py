@@ -49,6 +49,7 @@ try:
         auth_backend,
         UserRead,
         UserCreate,
+        UserUpdate,
     )
     from backend.models import User
     from backend.config import SENTRY_DSN
@@ -82,6 +83,7 @@ except ImportError:
         auth_backend,
         UserRead,
         UserCreate,
+        UserUpdate,
     )
     from models import User
     from config import SENTRY_DSN
@@ -121,7 +123,7 @@ async def session_cleanup_loop():
             print(f"[Cleanup Error] {e}")
 
 
-app = FastAPI(title="AI Tutor Screener", lifespan=lifespan)
+app = FastAPI(title="AI Candidate Screener", lifespan=lifespan)
 
 # --- Rate Limiting ---
 limiter = Limiter(key_func=get_remote_address)
@@ -154,7 +156,7 @@ app.include_router(
 )
 
 app.include_router(
-    fastapi_users.get_users_router(UserRead, UserCreate),
+    fastapi_users.get_users_router(UserRead, UserUpdate),
     prefix="/users",
     tags=["users"],
 )
@@ -206,7 +208,7 @@ async def assessment_and_notify(session_id: str):
                 )
                 await send_email(
                     recipient=session.candidate_email,
-                    subject=f"Your Cuemath Interview Assessment: {overall_score:.1f}/10",
+                    subject=f"Your AI Interview Assessment: {overall_score:.1f}/10",
                     html_content=html,
                 )
             except Exception as e:
@@ -327,7 +329,7 @@ async def transcribe_audio(request: Request, file: UploadFile = File(...)):
             model=WHISPER_MODEL,
             response_format="json",
             language="en",
-            prompt="The following is a voice response from a teaching candidate during a qualitative screening interview. Important vocabulary: teaching, education, curriculum, pedagogy, students, learning, instruction.",
+            prompt="The following is a voice response from a job candidate during a corporate screening interview. Important vocabulary: candidate, teamwork, collaboration, projects, communication, explanation, professional.",
         )
         text = transcription.text.strip() if transcription.text else ""
         return {"text": text}
@@ -758,7 +760,7 @@ async def bulk_generate_links(
     )
     await send_email(
         recipient=current_user.email,
-        subject=f"Cuemath Interview Links Generated — {req.label} ({req.count} links)",
+        subject=f"AI Interview Links Generated — {req.label} ({req.count} links)",
         html_content=html,
     )
     

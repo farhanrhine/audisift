@@ -99,7 +99,7 @@ def assessment_complete_email(
             </p>
           </div>
           <div class="footer">
-            <p>Cuemath AI Tutor Screener</p>
+            <p>AI Candidate Screener</p>
           </div>
         </div>
       </body>
@@ -168,7 +168,7 @@ def bulk_links_email(
             </p>
           </div>
           <div class="footer">
-            <p>Cuemath AI Tutor Screener</p>
+            <p>AI Candidate Screener</p>
           </div>
         </div>
       </body>

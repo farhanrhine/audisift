@@ -14,7 +14,7 @@ let timerSeconds = 0;
 let silenceTimer = null;
 let accumulatedTranscript = '';
 const MIC_MAX_SECONDS = 60;
-const INTERVIEW_TOTAL_SECONDS = 600;
+const INTERVIEW_TOTAL_SECONDS = 600; // 10-minute interview
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -278,7 +278,7 @@ async function sendAnswer(text) {
 
   try {
     const ctrlCountdown = document.getElementById('ctrl-countdown');
-    const timeRemaining = ctrlCountdown ? ctrlCountdown.textContent : '07:00';
+    const timeRemaining = ctrlCountdown ? ctrlCountdown.textContent : '10:00'; // 10-min max
     
     const data = await API.fetchSendMessage(sessionId, text, timeRemaining);
     
@@ -365,11 +365,11 @@ function autoEndInterview() {
     const waitInterval = setInterval(() => {
       if (!isProcessing) {
         clearInterval(waitInterval);
-        sendAnswer('[System: Interview ended automatically due to 7-minute time limit]');
+        sendAnswer('[System: Interview ended automatically due to 10-minute time limit]');
       }
     }, 1000);
   } else {
-    sendAnswer('[System: Interview ended automatically due to 7-minute time limit]');
+    sendAnswer('[System: Interview ended automatically due to 10-minute time limit]');
   }
 }
 

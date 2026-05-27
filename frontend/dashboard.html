@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard — AI Tutor Screener</title>
-  <meta name="description" content="Admin dashboard for AI Tutor Screener — view all past interviews and assessment results." />
+  <title>Dashboard — AI Candidate Screener</title>
+  <meta name="description" content="Recruiter dashboard for AI Candidate Screener — view all past interviews and assessment results." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <script src="js/theme.js"></script>
+  <script src="js/auth.js"></script>
   <style>
     .page { position: relative; z-index: 1; min-height: 100vh; }
 
@@ -21,13 +22,11 @@
       position: sticky; top: 0; z-index: 100;
     }
     .nav-left { display: flex; align-items: center; gap: 12px; }
-    .nav-logo-icon {
-      width: 28px; height: 28px;
-      color: var(--accent);
-    }
+    .nav-logo-icon { width: 28px; height: 28px; color: var(--accent); }
     .nav-logo-icon svg { width: 100%; height: 100%; stroke-width: 2px; }
     .nav-text { font-family: var(--font-display); font-size: 1.25rem; color: var(--ink); line-height: 1; margin-bottom: 2px; }
     .nav-sub  { font-size: 0.70rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .nav-user { font-size: 0.88rem; font-weight: 500; color: var(--ink-soft); }
 
     /* MAIN */
     main { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
@@ -41,12 +40,12 @@
 
     /* STATS ROW */
     .stats-row {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 36px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 36px;
     }
-    .stat-card { padding: 32px 28px; border: 1px solid var(--border); box-shadow: var(--shadow-card); background: var(--paper-card); }
-    .stat-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); margin-bottom: 8px; }
-    .stat-value { font-family: var(--font-display); font-size: 3rem; line-height: 1; color: var(--ink); }
-    .stat-sub   { font-size: 0.85rem; color: var(--ink-soft); margin-top: 8px; font-weight: 500; }
+    .stat-card { padding: 28px 24px; border: 1px solid var(--border); box-shadow: var(--shadow-card); background: var(--paper-card); }
+    .stat-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); margin-bottom: 8px; }
+    .stat-value { font-family: var(--font-display); font-size: 2.6rem; line-height: 1; color: var(--ink); }
+    .stat-sub   { font-size: 0.82rem; color: var(--ink-soft); margin-top: 8px; font-weight: 500; }
 
     /* TABLE */
     .table-card { overflow: hidden; background: var(--paper-card); border: 1px solid var(--border); box-shadow: var(--shadow-card); border-radius: var(--radius-md); }
@@ -59,7 +58,7 @@
 
     .sessions-table { width: 100%; border-collapse: collapse; }
     .sessions-table th {
-      padding: 14px 28px; text-align: left; font-size: 0.75rem; font-weight: 600;
+      padding: 14px 28px; text-align: left; font-size: 0.72rem; font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);
       border-bottom: 1px solid var(--border-soft); background: var(--paper-warm);
     }
@@ -74,8 +73,7 @@
     .candidate-cell { display: flex; align-items: center; gap: 12px; }
     .cand-avatar {
       width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-      background: var(--paper-warm);
-      border: 1px solid var(--border);
+      background: var(--paper-warm); border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center;
       font-size: 14px; font-family: var(--font-display); color: var(--ink);
     }
@@ -108,6 +106,22 @@
       border-radius: 6px; height: 16px;
     }
 
+    /* Auth loading overlay */
+    #auth-loading {
+      position: fixed; inset: 0; background: var(--paper);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .auth-spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+
+    @media (max-width: 900px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 768px) {
       .stats-row { grid-template-columns: 1fr 1fr; }
       .sessions-table th:nth-child(4),
@@ -121,7 +135,8 @@
   </style>
 </head>
 <body>
-<div class="page">
+<div id="auth-loading"><div class="auth-spinner"></div></div>
+<div class="page" id="main-page" style="display:none">
 
   <!-- NAV -->
   <nav class="nav">
@@ -131,14 +146,19 @@
       </div>
       <div>
         <div class="nav-text">AI Screener</div>
-        <div class="nav-sub">Educator Assessment</div>
+        <div class="nav-sub">Corporate Assessment</div>
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:16px;">
-      <a href="index.html" class="btn btn-primary" style="padding:10px 20px">
-        <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;margin-right:-4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span class="nav-user" id="nav-user-name"></span>
+      <a href="index.html" class="btn btn-primary" style="padding:10px 20px; text-decoration:none; display:flex; align-items:center; gap:6px;">
+        <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         New Interview
       </a>
+      <button onclick="logout()" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px;" title="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </button>
       <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Theme">
         <svg viewBox="0 0 24 24" fill="none" class="icon theme-toggle-icon"></svg>
       </button>
@@ -151,7 +171,7 @@
     <div class="page-header animate-fadeIn">
       <div>
         <h1 class="font-display">Dashboard</h1>
-        <p>All tutor screening interviews</p>
+        <p>All candidate screening interviews</p>
       </div>
       <div id="last-updated" style="font-size:0.85rem; color:var(--ink-muted); font-weight:500;"></div>
     </div>
@@ -173,10 +193,15 @@
         <div class="stat-value" id="stat-pass">—</div>
         <div class="stat-sub">Recommended</div>
       </div>
+      <div class="card stat-card animate-fadeIn" style="animation-delay:0.3s">
+        <div class="stat-label">This Week</div>
+        <div class="stat-value" id="stat-week">—</div>
+        <div class="stat-sub">Interviews</div>
+      </div>
     </div>
 
     <!-- Table -->
-    <div class="card table-card animate-fadeIn" style="animation-delay:0.3s">
+    <div class="card table-card animate-fadeIn" style="animation-delay:0.4s">
       <div class="table-header">
         <h2 class="font-display">All Interviews</h2>
         <span id="table-count" class="table-count"></span>
@@ -184,9 +209,9 @@
 
       <!-- Filters -->
       <div style="padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-        <input type="text" id="search-input" placeholder="Search by name or email..." style="flex:1; min-width:200px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm); font-size:0.9rem;">
+        <input type="text" id="search-input" placeholder="Search by name…" style="flex:1; min-width:160px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm); font-size:0.9rem; color:var(--ink);">
         
-        <select id="recommendation-filter" style="padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm); font-size:0.9rem;">
+        <select id="recommendation-filter" style="padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm); font-size:0.9rem; color:var(--ink);">
           <option value="">All Recommendations</option>
           <option value="Move to next round">✓ Move Forward</option>
           <option value="Consider with reservations">⚠ Reservations</option>
@@ -194,13 +219,16 @@
         </select>
 
         <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem; color:var(--ink-soft);">
-          Score: <input type="number" id="score-min" placeholder="Min" min="0" max="10" style="width:50px; padding:6px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm);">
-          to <input type="number" id="score-max" placeholder="Max" min="0" max="10" style="width:50px; padding:6px; margin-left:4px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm);">
+          Score: <input type="number" id="score-min" placeholder="Min" min="0" max="10" style="width:52px; padding:6px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm);">
+          – <input type="number" id="score-max" placeholder="Max" min="0" max="10" style="width:52px; padding:6px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--paper-warm);">
         </label>
 
-        <button onclick="applyFilters()" class="btn btn-primary" style="padding:8px 16px; font-size:0.9rem;">Filter</button>
-        <button onclick="clearFilters()" class="btn btn-ghost" style="padding:8px 16px; font-size:0.9rem;">Clear</button>
-        <button onclick="exportCSV()" class="btn btn-secondary" style="padding:8px 16px; font-size:0.9rem;">📥 Export CSV</button>
+        <button onclick="applyFilters()" class="btn btn-primary" style="padding:8px 16px; font-size:0.88rem;">Filter</button>
+        <button onclick="clearFilters()" class="btn btn-ghost" style="padding:8px 16px; font-size:0.88rem;">Clear</button>
+        <button onclick="exportCSV()" class="btn btn-secondary" style="padding:8px 16px; font-size:0.88rem; display:flex; align-items:center; gap:6px;">
+          <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
       </div>
       <div id="table-body">
         <!-- Loading skeletons -->
@@ -216,9 +244,53 @@
 </div>
 
 <script>
+// ---------------------------------------------------------------
+// Auth guard — must be logged in to view dashboard
+// ---------------------------------------------------------------
+let currentUser = null;
+
+async function initDashboard() {
+  try {
+    currentUser = await checkAuth();
+    // Show user name in nav
+    const nameEl = document.getElementById('nav-user-name');
+    if (nameEl && currentUser.full_name) {
+      nameEl.textContent = currentUser.full_name;
+    }
+    // Reveal page
+    document.getElementById('auth-loading').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+    // Load data
+    loadStats();
+    loadSessions();
+  } catch (e) {
+    // Not authenticated — redirect to login
+    window.location.href = 'login.html';
+  }
+}
+
+// ---------------------------------------------------------------
+// Authenticated fetch helper
+// ---------------------------------------------------------------
+function authFetch(url, options = {}) {
+  const token = getToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}
+
+// ---------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------
 async function loadStats() {
   try {
-    const res = await fetch('/api/stats');
+    const res = await authFetch('/api/stats');
+    if (res.status === 401) { window.location.href = 'login.html'; return; }
     if (!res.ok) throw new Error('Failed to load stats');
     const data = await res.json();
 
@@ -227,6 +299,7 @@ async function loadStats() {
     document.getElementById('stat-pass').textContent  = data.total_interviews > 0
       ? `${data.pass_rate}%`
       : '—';
+    document.getElementById('stat-week').textContent  = data.this_week?.count ?? '—';
   } catch (err) {
     console.error('Stats error:', err);
   }
@@ -234,6 +307,9 @@ async function loadStats() {
 
 let currentFilters = {};
 
+// ---------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------
 async function loadSessions() {
   try {
     const params = new URLSearchParams();
@@ -243,7 +319,8 @@ async function loadSessions() {
     if (currentFilters.score_max) params.append('score_max', currentFilters.score_max);
     params.append('limit', 100);
 
-    const res = await fetch(`/api/sessions?${params}`);
+    const res = await authFetch(`/api/sessions?${params}`);
+    if (res.status === 401) { window.location.href = 'login.html'; return; }
     if (!res.ok) throw new Error('Failed to load sessions');
     const data = await res.json();
 
@@ -282,9 +359,9 @@ async function loadSessions() {
     tableBody.appendChild(table);
 
     const checkIcon = '<svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg>';
-    const waitIcon = '<svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    const waitIcon  = '<svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
     const errorIcon = '<svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    const warningIcon = '<svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    const warnIcon  = '<svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 
     const tbody = table.querySelector('#tbody');
     for (const s of data.sessions) {
@@ -295,20 +372,22 @@ async function loadSessions() {
 
       const statusBadge = s.status === 'completed'
         ? `<span class="badge badge-green">${checkIcon} Completed</span>`
+        : s.status === 'generating'
+        ? `<span class="badge badge-amber">${waitIcon} Generating…</span>`
         : `<span class="badge badge-amber">${waitIcon} In Progress</span>`;
 
       let scoreHtml = '<span class="score-pill score-none">—</span>';
-      if (s.overall_score !== null) {
+      if (s.overall_score !== null && s.overall_score !== undefined) {
         const sc = s.overall_score >= 7 ? 'high' : s.overall_score >= 5 ? 'mid' : 'low';
         scoreHtml = `<span class="score-pill score-${sc}">${s.overall_score}/10</span>`;
       }
 
-      let recHtml = '—';
+      let recHtml = '<span style="color:var(--ink-muted)">—</span>';
       if (s.recommendation) {
         const recMap = {
-          'Move to next round':      { cls: 'badge-green', icon: checkIcon },
-          'Do not move forward':     { cls: 'badge-red',   icon: errorIcon },
-          'Consider with reservations': { cls: 'badge-amber', icon: warningIcon },
+          'Move to next round':         { cls: 'badge-green', icon: checkIcon },
+          'Do not move forward':        { cls: 'badge-red',   icon: errorIcon },
+          'Consider with reservations': { cls: 'badge-amber', icon: warnIcon },
         };
         const rm = recMap[s.recommendation] || { cls: 'badge-grey', icon: '•' };
         recHtml = `<span class="badge ${rm.cls}">${rm.icon} ${s.recommendation}</span>`;
@@ -365,10 +444,11 @@ async function exportCSV() {
   try {
     const params = new URLSearchParams();
     if (currentFilters.recommendation) params.append('recommendation', currentFilters.recommendation);
-    
-    const res = await fetch(`/api/sessions/export/csv?${params}`);
+    const token = getToken();
+    const res = await fetch(`/api/sessions/export/csv?${params}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Export failed');
-    
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -380,17 +460,18 @@ async function exportCSV() {
     a.remove();
   } catch (err) {
     console.error('CSV export error:', err);
-    alert('Failed to export CSV');
+    alert('Failed to export CSV. Make sure you are logged in.');
   }
 }
 
 function escapeHtml(text) {
-  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// Initial load
-loadStats();
-loadSessions();
+// ---------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------
+initDashboard();
 
 // Auto-refresh every 30 seconds
 setInterval(() => {

@@ -128,7 +128,7 @@ async def update_session_state(session_id: str, exchange_count_or_state, uncover
             if interview_state:
                 values[Session.interview_state] = json.dumps(interview_state, default=str)
         
-        await db.execute(update(Session).where(Session.id == session_id).values(**values))
+        await db.execute(update(Session).where(Session.id == session_id).values(values))
         await db.commit()
 
 
@@ -190,8 +190,8 @@ async def get_messages(session_id: str) -> list[dict]:
 # --------- Assessment Management ---------
 
 
-async def save_assessment(session_id: str, report_json: str, recommendation: str = None, overall_score: int = None):
-    """Save assessment report."""
+async def save_assessment(session_id: str, report_json: str, recommendation: str = None, overall_score: float = None):
+    """Save assessment report and denormalize score onto Session for fast dashboard queries."""
     async with AsyncSessionLocal() as db:
         assessment = Assessment(
             session_id=session_id,
@@ -200,6 +200,15 @@ async def save_assessment(session_id: str, report_json: str, recommendation: str
             overall_score=overall_score,
         )
         db.add(assessment)
+        # Denormalize onto Session row so dashboard queries don't need a join
+        await db.execute(
+            update(Session).where(Session.id == session_id).values(
+                overall_score=overall_score,
+                recommendation=recommendation,
+                status="completed",
+                completed_at=datetime.utcnow(),
+            )
+        )
         await db.commit()
 
 

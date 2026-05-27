@@ -147,3 +147,22 @@ async function apiRequest(endpoint, options = {}) {
     
     return await response.json();
 }
+
+/**
+ * Get auth token from localStorage
+ */
+function getToken() {
+    return localStorage.getItem('access_token');
+}
+
+// ---------------------------------------------------------------
+// Expose as globals so login.html / register.html inline scripts
+// can call these when auth.js is loaded as a classic <script src>
+// ---------------------------------------------------------------
+window.login = login;
+window.logout = logout;
+window.register = register;
+window.checkAuth = checkAuth;
+window.getCurrentUser = getCurrentUser;
+window.apiRequest = apiRequest;
+window.getToken = getToken;

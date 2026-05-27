@@ -10,27 +10,27 @@ from langgraph.graph import StateGraph, END
 try:
     from backend.config import GROQ_API_KEY, CONVERSATION_MODEL
     from backend.prompts import (
-        SYSTEM_PROMPT,
+        SARAH_SYSTEM,
         ASSESSMENT_DIMENSIONS,
         OPENING_PROMPT,
-        SYSTEM_ROUTING_PROMPT,
+        QUESTION_PROMPT,
+        PROBE_PROMPT,
         REPEAT_PROMPT,
         DONT_KNOW_PROMPT,
         WRAP_UP_PROMPT,
-        ASSESS_QUALITY_PROMPT,
     )
     from backend.database import update_session_state
 except ImportError:
     from config import GROQ_API_KEY, CONVERSATION_MODEL
     from prompts import (
-        SYSTEM_PROMPT,
+        SARAH_SYSTEM,
         ASSESSMENT_DIMENSIONS,
         OPENING_PROMPT,
-        SYSTEM_ROUTING_PROMPT,
+        QUESTION_PROMPT,
+        PROBE_PROMPT,
         REPEAT_PROMPT,
         DONT_KNOW_PROMPT,
         WRAP_UP_PROMPT,
-        ASSESS_QUALITY_PROMPT,
     )
     from database import update_session_state
 
@@ -60,13 +60,14 @@ class InterviewState(TypedDict):
     last_sarah_message: str
     is_repeat_request: bool
     last_answer_quality: Optional[str]
+    time_remaining: str  # Passed from frontend (e.g. "09:30")
 
 
 # ============================================================================
 # REGEX PATTERNS
 # ============================================================================
-
-
+# PURE-CODE DECISION HELPERS  (no LLM calls — deterministic)
+# ============================================================================
 
 REPEAT_RE = re.compile(
     r"\b(repeat|again|pardon|say that again|what (was|were|did) you (ask|say)|"
@@ -80,6 +81,28 @@ DONT_KNOW_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Answer quality thresholds — code owns these numbers
+_SHORT_WORD_THRESHOLD  = 12   # under this → "short"
+_VAGUE_WORD_THRESHOLD  = 30   # under this → "vague"
+# above _VAGUE_WORD_THRESHOLD  → "strong"
+
+# Time thresholds (seconds)
+_FORCE_WRAP_SECONDS = 30   # server-side: if <= 30s remain, always wrap up
+
+
+def _parse_time_seconds(time_str: str) -> int:
+    """
+    Convert "MM:SS" string from frontend into total seconds.
+    Returns 9999 if the string is malformed (safe default = don't force wrap).
+    """
+    try:
+        parts = time_str.strip().split(":")
+        if len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+    except (ValueError, AttributeError):
+        pass
+    return 9999  # safe default
+
 
 # ============================================================================
 # LLM CALL HELPERS
@@ -88,7 +111,7 @@ DONT_KNOW_RE = re.compile(
 async def _call_with_history(messages: list[dict], prompt: str) -> str:
     """Call LLM with conversation history."""
     llm_messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": SARAH_SYSTEM},
         *messages,
         {"role": "system", "content": prompt},
     ]
@@ -119,16 +142,17 @@ async def _groq(messages: list[dict]) -> str:
         return "I apologize, my system had a brief hiccup. Let's continue."
 
 
-async def _assess_quality(answer: str, last_question: str) -> str:
-    """Assess answer quality: short / vague / strong."""
-    if len(answer.split()) < 12:
+async def _assess_quality(answer: str, _last_question: str) -> str:
+    """
+    Classify answer quality using pure word-count thresholds.
+    Code owns this decision — no LLM call.
+    """
+    word_count = len(answer.split())
+    if word_count < _SHORT_WORD_THRESHOLD:
         return "short"
-    prompt = ASSESS_QUALITY_PROMPT.format(
-        question=last_question,
-        answer=answer,
-    )
-    result = (await _call_simple(prompt)).strip().lower()
-    return result if result in ("strong", "vague", "strong") else "strong"
+    if word_count < _VAGUE_WORD_THRESHOLD:
+        return "vague"
+    return "strong"
 
 
 # ============================================================================
@@ -136,18 +160,25 @@ async def _assess_quality(answer: str, last_question: str) -> str:
 # ============================================================================
 
 async def question_node(state: InterviewState) -> InterviewState:
-    """Generate Sarah's next question for current dimension."""
+    """Generate Sarah's next question based on dimensions still uncovered."""
     dim_lines = "\n".join(
         f"- {dim}: {ASSESSMENT_DIMENSIONS[dim]}"
         for dim in state["dimensions_uncovered"]
     ) if state["dimensions_uncovered"] else "All dimensions covered."
 
-    time_remaining = "07:00"
-    prompt = SYSTEM_ROUTING_PROMPT.format(
+    # Pick next uncovered dimension
+    next_dim = state["dimensions_uncovered"][0] if state["dimensions_uncovered"] else None
+    next_dim_desc = ASSESSMENT_DIMENSIONS.get(next_dim, "") if next_dim else ""
+    last_answer = state["messages"][-1]["content"] if state["messages"] else ""
+
+    # Use actual time_remaining from state (passed from frontend)
+    time_remaining = state.get("time_remaining", "10:00")
+
+    prompt = QUESTION_PROMPT.format(
         candidate_name=state["candidate_name"],
-        exchange_count=state["exchange_count"],
-        uncovered_dimensions=dim_lines,
-        time_remaining=time_remaining,
+        dimension_name=next_dim or "professional background",
+        dimension_description=next_dim_desc,
+        last_answer=last_answer[:500] if last_answer else "just introduced themselves",
     )
 
     response = await _call_with_history(state["messages"], prompt)
@@ -160,7 +191,18 @@ async def question_node(state: InterviewState) -> InterviewState:
 
 async def wrap_up_node(state: InterviewState) -> InterviewState:
     """Generate Sarah's closing statement."""
-    prompt = WRAP_UP_PROMPT.format(candidate_name=state["candidate_name"])
+    # Use last candidate message as the memorable moment for personalization
+    memorable = ""
+    for msg in reversed(state["messages"]):
+        if msg["role"] == "user" and len(msg["content"].split()) > 5:
+            memorable = msg["content"][:200]
+            break
+    if not memorable:
+        memorable = "their professional journey"
+    prompt = WRAP_UP_PROMPT.format(
+        candidate_name=state["candidate_name"],
+        memorable_moment=memorable,
+    )
     response = await _call_simple(prompt)
     state["messages"].append({"role": "assistant", "content": response})
     state["last_sarah_message"] = response
@@ -177,6 +219,7 @@ async def init_interview_state(
     exchange_count: int = 0,
     uncovered_dimensions: list = None,
     messages: list = None,
+    time_remaining: str = "10:00",
 ) -> InterviewState:
     """Initialize interview state."""
     if uncovered_dimensions is None:
@@ -200,6 +243,7 @@ async def init_interview_state(
         last_sarah_message="",
         is_repeat_request=False,
         last_answer_quality=None,
+        time_remaining=time_remaining,
     )
 
 
@@ -232,6 +276,18 @@ class InterviewEngine:
             "messages": messages,
         }
 
+    @property
+    def exchange_count(self) -> int:
+        if self.state:
+            return self.state.get("exchange_count", 0)
+        return self._init_params.get("exchange_count", 0)
+
+    @property
+    def uncovered_dimensions(self) -> list:
+        if self.state:
+            return self.state.get("dimensions_uncovered", [])
+        return self._init_params.get("uncovered_dimensions") or list(ASSESSMENT_DIMENSIONS.keys())
+
     async def _ensure_initialized(self):
         """Lazy initialization of state."""
         if not self._initialized:
@@ -255,19 +311,42 @@ class InterviewEngine:
             pass  # Graceful degradation if DB unavailable
         return response
 
-    async def process_candidate_answer(self, answer: str, time_remaining: str = "07:00") -> dict:
+    async def process_candidate_answer(self, answer: str, time_remaining: str = "10:00") -> dict:
         """Process candidate answer and return Sarah's response."""
         await self._ensure_initialized()
+        # Update time_remaining in state so question_node uses the real value
+        self.state["time_remaining"] = time_remaining
 
-        # Handle early termination
+        # ---------------------------------------------------------------
+        # CODE DECISION: force wrap-up if time is nearly up
+        # The LLM has no authority to keep the interview going past the timer
+        # ---------------------------------------------------------------
+        seconds_left = _parse_time_seconds(time_remaining)
+        if seconds_left <= _FORCE_WRAP_SECONDS and not self.state["interview_complete"]:
+            self.state["interview_complete"] = True
+            self.state["end_reason"] = "timeout"
+            response_state = await wrap_up_node(self.state)
+            self.state = response_state
+            try:
+                await update_session_state(self.session_id, self.state)
+            except:
+                pass
+            return {
+                "interviewer_response": self.state["last_sarah_message"],
+                "interview_complete": True,
+            }
+
+        # ---------------------------------------------------------------
+        # CODE DECISION: handle system termination signals
+        # ---------------------------------------------------------------
         is_termination = answer.startswith("[") and any(
             x in answer.lower() for x in ["end", "stop", "terminate"]
         )
         if is_termination:
             self.state["interview_complete"] = True
             self.state["end_reason"] = "early"
-            response = await wrap_up_node(self.state)
-            self.state = response
+            response_state = await wrap_up_node(self.state)
+            self.state = response_state
             try:
                 await update_session_state(self.session_id, self.state)
             except:
@@ -351,31 +430,36 @@ class InterviewEngine:
         return False
 
     async def _handle_repeat(self) -> str:
-        """Handle repeat request."""
-        if not self.state["last_sarah_message"]:
-            return "Of course! To get us started, could you tell me a bit about yourself and your background?"
-        prompt = REPEAT_PROMPT.format(last_question=self.state["last_sarah_message"])
-        response = await _call_simple(prompt)
-        if "hiccup" in response.lower():
-            response = f"Of course! I was asking: {self.state['last_sarah_message']}"
+        """
+        Handle repeat request with PURE CODE — no LLM call.
+        Re-emits the last Sarah message with a warm prefix.
+        The LLM is not needed here and would be non-deterministic.
+        """
+        last = self.state["last_sarah_message"]
+        if not last:
+            response = "Of course! To get us started, could you tell me a bit about yourself and what draws you to this career path?"
+        else:
+            # Code picks the prefix, LLM picks nothing
+            response = f"Of course! I was asking: {last}"
         self.state["messages"].append({"role": "assistant", "content": response})
         self.state["last_sarah_message"] = response
         return response
 
     async def _generate_followup(self, answer: str) -> str:
-        """Generate follow-up probe."""
-        prompt = f"""The candidate's answer was brief or vague: "{answer}"
-Generate ONE specific follow-up probe (1-2 sentences). Examples:
-- "Can you walk me through a specific example?"
-- "What did you do when that happened?"
-Do NOT ask for an analogy if they already gave one."""
-        response = await _call_simple(prompt)
+        """Generate follow-up probe using PROBE_PROMPT."""
+        dim = self.state.get("current_dimension", "professional background")
+        prompt = PROBE_PROMPT.format(
+            candidate_name=self.state["candidate_name"],
+            last_answer=answer[:500],
+            dimension_name=dim,
+        )
+        response = await _call_with_history(self.state["messages"], prompt)
         self.state["messages"].append({"role": "assistant", "content": response})
         self.state["last_sarah_message"] = response
         return response
 
     async def _graceful_move_on(self):
-        """Move to next dimension after "I don't know"."""
+        """Move to next dimension after 'I don't know'."""
         if (
             self.state["exchange_count"] >= 7
             or not self.state["dimensions_uncovered"]
@@ -387,10 +471,15 @@ Do NOT ask for an analogy if they already gave one."""
             next_dim = (
                 self.state["dimensions_uncovered"][0]
                 if self.state["dimensions_uncovered"]
-                else "teaching approach"
+                else "candidate_fit"
             )
-            next_hint = ASSESSMENT_DIMENSIONS.get(next_dim, "their teaching approach")
-            prompt = DONT_KNOW_PROMPT.format(next_dimension_hint=next_hint)
+            next_dim_description = ASSESSMENT_DIMENSIONS.get(next_dim, "their overall professional background")
+            # Use correct param names matching DONT_KNOW_PROMPT in prompts.py
+            prompt = DONT_KNOW_PROMPT.format(
+                candidate_name=self.state["candidate_name"],
+                next_dimension_name=next_dim,
+                next_dimension_description=next_dim_description,
+            )
             response = await _call_with_history(self.state["messages"], prompt)
             self.state["messages"].append({"role": "assistant", "content": response})
             self.state["last_sarah_message"] = response

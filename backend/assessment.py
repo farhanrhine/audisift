@@ -3,14 +3,48 @@ import re
 from groq import AsyncGroq
 try:
     from backend.config import GROQ_API_KEY, ASSESSMENT_MODEL
-    from backend.database import get_messages, get_session, save_assessment, complete_session
+    from backend.database import get_messages, get_session, save_assessment
     from backend.prompts import ASSESSMENT_PROMPT, ASSESSMENT_RUBRICS, build_rubric_string
 except ImportError:
     from config import GROQ_API_KEY, ASSESSMENT_MODEL
-    from database import get_messages, get_session, save_assessment, complete_session
+    from database import get_messages, get_session, save_assessment
     from prompts import ASSESSMENT_PROMPT, ASSESSMENT_RUBRICS, build_rubric_string
 
 client = AsyncGroq(api_key=GROQ_API_KEY)
+
+# ============================================================================
+# CODE-OWNS-DECISIONS CONSTANTS
+# These are the ONLY source of truth for business rules.
+# The LLM has no authority to override these.
+# ============================================================================
+
+# Recommendation thresholds — code owns this, not the LLM
+_REC_MOVE_FORWARD  = 7.5   # overall_score >= this → "Move to next round"
+_REC_RESERVATIONS  = 5.0   # overall_score >= this → "Consider with reservations"
+# below _REC_RESERVATIONS       → "Do not move forward"
+
+# Confidence from evidence (candidate word count per dimension)
+_CONF_HIGH_WORDS   = 80    # >= this many candidate words → "high"
+_CONF_MEDIUM_WORDS = 20    # >= this many candidate words → "medium"
+# below _CONF_MEDIUM_WORDS        → "low"
+
+# Valid dimension keys
+_DIMENSIONS = [
+    "communication_clarity",
+    "warmth_and_patience",
+    "ability_to_simplify",
+    "english_fluency",
+    "candidate_fit",
+]
+
+# Keyword signals per dimension — used to count evidence in transcript
+_DIMENSION_KEYWORDS = {
+    "communication_clarity": ["explain", "clear", "understand", "structure", "communicate", "describe", "articulate"],
+    "warmth_and_patience":   ["team", "collaborate", "support", "help", "listen", "share", "together", "contribute", "group", "partner"],
+    "ability_to_simplify":   ["simple", "analogy", "example", "break down", "easy", "relate", "imagine", "story"],
+    "english_fluency":       [],  # assessed from all candidate words
+    "candidate_fit":         ["culture", "fit", "values", "align", "grow", "motivation", "passion", "role", "career", "learn"],
+}
 
 # Messages that are system artifacts — not real candidate answers
 _NOISE_PATTERNS = re.compile(
@@ -85,8 +119,12 @@ async def generate_assessment(session_id: str) -> dict:
         print(f"[Assessment] Session {session_id[:8]}... | ZERO substantive candidate data.")
         flags.append("zero_data_detected")
         report = _create_zero_data_report(candidate_name, session_id)
-        await save_assessment(session_id, json.dumps(report))
-        await complete_session(session_id)
+        await save_assessment(
+            session_id,
+            json.dumps(report),
+            recommendation=report["recommendation"],
+            overall_score=report["overall_score"],
+        )
         return report
     
     if candidate_count < 3:
@@ -116,7 +154,7 @@ async def generate_assessment(session_id: str) -> dict:
             {
                 "role": "system",
                 "content": (
-                    "You are an expert educator evaluator with deep knowledge of teaching excellence. "
+                    "You are an expert recruiter and talent evaluator with deep knowledge of professional workplace competencies and candidate screening. "
                     "You always respond with valid JSON only. No extra text, no markdown fences. "
                     "For each dimension, provide: score (1-10), confidence (high|medium|low), "
                     "justification (2-3 sentences), and evidence_quote (a direct quote from the transcript). "
@@ -132,11 +170,16 @@ async def generate_assessment(session_id: str) -> dict:
     raw = response.choices[0].message.content.strip()
 
     # 5. Robust JSON extraction and enhancement
-    report = _extract_and_enhance_json(raw, candidate_name, session_id, flags, candidate_count)
+    report = _extract_and_enhance_json(raw, candidate_name, session_id, flags, candidate_count, messages)
 
-    # 6. Save to database
-    await save_assessment(session_id, json.dumps(report))
-    await complete_session(session_id)
+    # 6. Save to database — save_assessment also denormalizes score onto Session
+    #    and sets status=completed atomically, so complete_session is not needed
+    await save_assessment(
+        session_id,
+        json.dumps(report),
+        recommendation=report.get("recommendation"),
+        overall_score=report.get("overall_score"),
+    )
 
     return report
 
@@ -188,10 +231,97 @@ def _create_zero_data_report(candidate_name: str, session_id: str) -> dict:
     }
 
 
-def _extract_and_enhance_json(raw: str, candidate_name: str, session_id: str, flags: list, candidate_count: int) -> dict:
+# ============================================================================
+# PURE-CODE DECISION FUNCTIONS
+# All business decisions live here — not in the LLM output
+# ============================================================================
+
+def _clamp_score(score) -> float:
+    """Clamp score to valid range [1, 10]. Code enforces bounds, LLM doesn't."""
+    try:
+        s = float(score)
+        return round(max(1.0, min(10.0, s)), 1)
+    except (TypeError, ValueError):
+        return 5.0  # safe neutral fallback
+
+
+def _compute_overall_score(dimensions: dict) -> float:
+    """
+    Always compute overall_score from dimension scores in Python.
+    Never trust the LLM's self-computed average.
+    """
+    scores = [dimensions.get(k, {}).get("score", 5.0) for k in _DIMENSIONS]
+    return round(sum(scores) / len(scores), 1)
+
+
+def _compute_recommendation(overall_score: float) -> str:
+    """
+    Compute hiring recommendation from score using fixed thresholds.
+    This is a business decision — code owns it, not the LLM.
+    """
+    if overall_score >= _REC_MOVE_FORWARD:
+        return "Move to next round"
+    if overall_score >= _REC_RESERVATIONS:
+        return "Consider with reservations"
+    return "Do not move forward"
+
+
+def _compute_evidence_word_counts(messages: list[dict]) -> dict[str, int]:
+    """
+    Count how many candidate words exist that signal each dimension.
+    Returns {dimension_key: word_count} for confidence override.
+    """
+    candidate_text = " ".join(
+        m["content"].lower()
+        for m in messages
+        if m.get("role") == "candidate"
+    )
+    total_candidate_words = len(candidate_text.split())
+
+    counts = {}
+    for dim in _DIMENSIONS:
+        if dim == "english_fluency":
+            # Fluency is assessed from ALL candidate words
+            counts[dim] = total_candidate_words
+        else:
+            keywords = _DIMENSION_KEYWORDS.get(dim, [])
+            if keywords:
+                dim_words = sum(
+                    candidate_text.count(kw) * 5  # weight: each keyword ~ 5 relevant words
+                    for kw in keywords
+                )
+                # Also add base word count proportionally
+                counts[dim] = dim_words + (total_candidate_words // len(_DIMENSIONS))
+            else:
+                counts[dim] = total_candidate_words // len(_DIMENSIONS)
+    return counts
+
+
+def _override_confidence(dim_key: str, evidence_words: int) -> str:
+    """
+    Override LLM confidence with evidence-based logic.
+    Code counts the evidence, LLM just claims confidence — we trust code.
+    """
+    if evidence_words >= _CONF_HIGH_WORDS:
+        return "high"
+    if evidence_words >= _CONF_MEDIUM_WORDS:
+        return "medium"
+    return "low"
+
+
+
+def _extract_and_enhance_json(
+    raw: str,
+    candidate_name: str,
+    session_id: str,
+    flags: list,
+    candidate_count: int,
+    messages: list[dict],
+) -> dict:
     """
     Extract JSON from LLM output and add Phase 4 enhancements.
-    Adds confidence scores, flags, and validates data quality.
+    Enforces Code-Owns-Decisions rules (clamps scores, overrides confidence,
+    recomputes overall_score and recommendation).
     """
     # Try to parse JSON
     report = None
@@ -229,42 +359,58 @@ def _extract_and_enhance_json(raw: str, candidate_name: str, session_id: str, fl
     if "dimensions" not in report:
         report["dimensions"] = {}
 
-    # Add confidence scores if not present
-    for dim_key in ["communication_clarity", "warmth_and_patience", "ability_to_simplify", "english_fluency", "candidate_fit"]:
+    # Pre-calculate evidence word counts for confidence overrides
+    evidence_counts = _compute_evidence_word_counts(messages)
+
+    # Clean, clamp and override confidence for all 5 dimensions
+    for dim_key in _DIMENSIONS:
         if dim_key not in report["dimensions"]:
             report["dimensions"][dim_key] = {
-                "score": 5,
-                "confidence": "medium",
+                "score": 5.0,
+                "confidence": "low",
                 "justification": "Insufficient data.",
                 "evidence_quote": "—"
             }
         else:
-            # Ensure all required fields exist
-            if "confidence" not in report["dimensions"][dim_key]:
-                report["dimensions"][dim_key]["confidence"] = _infer_confidence(report["dimensions"][dim_key].get("score", 5))
-            if "evidence_quote" not in report["dimensions"][dim_key]:
-                report["dimensions"][dim_key]["evidence_quote"] = "—"
+            dim_data = report["dimensions"][dim_key]
+            if not isinstance(dim_data, dict):
+                dim_data = {"score": 5.0, "justification": str(dim_data), "evidence_quote": "—"}
+                report["dimensions"][dim_key] = dim_data
+            
+            # 1. Clamp score in [1.0, 10.0]
+            dim_data["score"] = _clamp_score(dim_data.get("score", 5.0))
+            
+            # 2. Evidence-based confidence override (Code owns this!)
+            words = evidence_counts.get(dim_key, 0)
+            dim_data["confidence"] = _override_confidence(dim_key, words)
+            
+            # Ensure quote fields exist
+            if "evidence_quote" not in dim_data:
+                dim_data["evidence_quote"] = "—"
+            if "justification" not in dim_data:
+                dim_data["justification"] = "No justification provided."
 
-    # Calculate overall score if not present
-    if "overall_score" not in report or not report["overall_score"]:
-        scores = [
-            report["dimensions"].get(k, {}).get("score", 5)
-            for k in ["communication_clarity", "warmth_and_patience", "ability_to_simplify", "english_fluency", "candidate_fit"]
-        ]
-        report["overall_score"] = round(sum(scores) / len(scores), 1)
+    # 3. Always recompute overall score from dimension scores in Python
+    report["overall_score"] = _compute_overall_score(report["dimensions"])
+
+    # 4. Always compute recommendation from score thresholds in Python
+    report["recommendation"] = _compute_recommendation(report["overall_score"])
 
     # Add flags for data quality
     if "flags" not in report:
         report["flags"] = []
     
-    report["flags"].extend(flags)
+    # Merge flags from analysis
+    for f in flags:
+        if f not in report["flags"]:
+            report["flags"].append(f)
     
-    # If too many low-confidence dimensions, add insufficient_data flag
+    # If 3+ dimensions have low confidence, add insufficient_data flag
     low_confidence_count = sum(
         1 for dim in report["dimensions"].values()
         if dim.get("confidence") == "low"
     )
-    if low_confidence_count >= 3:
+    if low_confidence_count >= 3 and "insufficient_data" not in report["flags"]:
         report["flags"].append("insufficient_data")
 
     # Add percentile_rank (placeholder, nullable for now)
@@ -274,7 +420,6 @@ def _extract_and_enhance_json(raw: str, candidate_name: str, session_id: str, fl
     # Ensure other fields
     report.setdefault("candidate_name", candidate_name)
     report.setdefault("session_id", session_id)
-    report.setdefault("recommendation", "Consider with reservations")
     report.setdefault("summary", "Assessment completed. Review dimensions for detailed feedback.")
 
     return report

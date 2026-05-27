@@ -1,8 +1,8 @@
 """Authentication setup with fastapi-users."""
 
-from typing import Optional
+from typing import Optional, Any
 from fastapi import Depends
-from fastapi_users import FastAPIUsers, BaseUserManager
+from fastapi_users import FastAPIUsers, BaseUserManager, schemas
 from fastapi_users.authentication import (
     AuthenticationBackend,
     BearerTransport,
@@ -23,23 +23,19 @@ except ImportError:
 
 
 # User schemas for registration/response
-class UserRead(BaseModel):
+class UserRead(schemas.BaseUser[str]):
     """User schema for reading."""
-    id: int
-    email: EmailStr
-    is_active: bool
-    is_superuser: bool
     full_name: str
 
-    class Config:
-        from_attributes = True
 
-
-class UserCreate(BaseModel):
+class UserCreate(schemas.BaseUserCreate):
     """User schema for creation."""
-    email: EmailStr
-    password: str
     full_name: str
+
+
+class UserUpdate(schemas.BaseUserUpdate):
+    """User schema for update."""
+    full_name: Optional[str] = None
 
 
 async def get_user_db(session: AsyncSession = Depends(lambda: AsyncSessionLocal())):
@@ -57,6 +53,9 @@ class UserManager(BaseUserManager):
 
     async def on_after_login(self, user: User, request=None, response=None):
         print(f"[Auth] User logged in: {user.email}")
+
+    def parse_id(self, value: Any) -> str:
+        return str(value)
 
 
 async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):

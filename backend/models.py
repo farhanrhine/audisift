@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models for AI Tutor Screener."""
 
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 import uuid
@@ -49,7 +49,7 @@ class Session(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     candidate_name = Column(String(255), nullable=False)
     candidate_email = Column(String(255), nullable=True)
-    status = Column(String(50), default="in_progress", index=True)  # in_progress, completed, abandoned
+    status = Column(String(50), default="in_progress", index=True)  # in_progress, completed, generating, abandoned
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime, nullable=True)
     exchange_count = Column(Integer, default=0)
@@ -57,6 +57,9 @@ class Session(Base):
     interview_state = Column(Text, nullable=True)  # JSON stringified InterviewState (Phase 3)
     organization_id = Column(String(36), ForeignKey("organization.id"), nullable=True)
     owner_id = Column(String(36), ForeignKey("user.id"), nullable=True)
+    # Denormalized for fast dashboard queries (written when assessment is saved)
+    overall_score = Column(Float, nullable=True, index=True)
+    recommendation = Column(String(100), nullable=True, index=True)
 
     # Relationships
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")

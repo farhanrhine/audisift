@@ -1,7 +1,7 @@
-# AI Tutor Screener
-## Adaptive Voice Interview System for Educator Assessment
+# AI Candidate Screener
+## Adaptive Voice Interview System for Job Candidate Assessment
 
-> A production-grade, voice-first screening engine designed to evaluate tutor pedagogy, communication, and instructional warmth through high-fidelity adaptive conversation.
+> A production-grade, voice-first screening engine designed to evaluate candidate communication, structured explanation, and teamwork through high-fidelity adaptive conversation.
 
 **<a href="https://ai-tutor-screener-29ln.onrender.com/" target="_blank">🚀 Live Demo</a>**
 
@@ -135,10 +135,10 @@ graph TD
 | Dimension | What It Measures |
 |---|---|
 | **Communication Clarity** | Clear, structured, easy to follow |
-| **Warmth & Patience** | Genuine care and empathy for students |
-| **Ability to Simplify** | Child-friendly analogies and explanations |
+| **Warmth & Patience** | Collaboration and teamwork skills in team environments |
+| **Ability to Simplify** | Clear explanations of complex concepts for non-technical stakeholders |
 | **English Fluency** | Natural, grammatically correct speech |
-| **Candidate Fit** | Overall suitability for tutoring positions |
+| **Candidate Fit** | Overall suitability for corporate positions and culture |
 
 Each dimension gets a score (1–10), a one-sentence justification, and a **direct quote** from the transcript as evidence.
 
@@ -213,7 +213,8 @@ DATABASE_URL=./screener.db
 # SMTP_HOST=smtp.gmail.com
 # SMTP_PORT=587
 # SMTP_USER=your_email@gmail.com
-# SMTP_PASSWORD=your_app_password
+# SMTP_PASSWORD=your_gmail_app_password
+# NOTIFICATION_EMAIL=your_email@gmail.com
 
 # Error tracking (optional)
 # SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
@@ -228,14 +229,41 @@ uv run uvicorn main:app --reload
 
 Open **http://localhost:8000** in Chrome or Edge.
 
-#### Optional: Enable Email Notifications
-Set the SMTP environment variables in `backend/.env` to enable assessment completion emails:
+### 4. Running Tests
+
+The project includes a comprehensive, offline-friendly test suite checking database CRUD, LangGraph state machine routing, assessment calculations, and FastAPI REST endpoints/authentication.
+
+To execute the test suite:
+
 ```bash
-export SMTP_HOST=smtp.gmail.com
-export SMTP_PORT=587
-export SMTP_USER=your_email@gmail.com
-export SMTP_PASSWORD=your_app_password
+uv run pytest
 ```
+
+*(Note: On Windows, dynamic DLL directory pathing is automated on import to support running native C++ extensions like `greenlet` from within the virtualenv.)*
+
+#### Optional: Enable Email Notifications
+Add these variables to your `.env` file to enable automated email notifications:
+
+```env
+# Email notifications config
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_gmail_app_password
+NOTIFICATION_EMAIL=your_email@gmail.com
+```
+
+##### How to set this up for free using Gmail:
+1. **SMTP_HOST**: Keep as `smtp.gmail.com` (Google's free SMTP server).
+2. **SMTP_PORT**: Keep as `587`.
+3. **SMTP_USER**: Set to your own Gmail address (e.g., `yourname@gmail.com`).
+4. **SMTP_PASSWORD**: Google does not allow apps to use your normal login password for security. Instead, generate a **free App Password** from your Google Account:
+   - Go to your [Google Account Settings](https://myaccount.google.com/).
+   - Ensure **2-Step Verification** is enabled for your Google account.
+   - Search for **"App passwords"** in the settings search bar.
+   - Select "Other (custom name)" from the app list, name it *AI Candidate Screener*, and click **Generate**.
+   - Copy the 16-character passcode it generates (e.g., `abcd efgh ijkl mnop`) and paste it as the `SMTP_PASSWORD` value in your `.env` file (remove any spaces so it's a single 16-letter string: `abcdefghijklmnop`).
+5. **NOTIFICATION_EMAIL**: Set to your email address where you want to receive generated bulk interview links.
 
 Without these, the email service silently skips notification sending (no errors).
 
@@ -259,7 +287,7 @@ Without these, the email service silently skips notification sending (no errors)
 ## Key Design Decisions
 
 ### No hardcoded question list
-Instead of a fixed list like "Q1: tell me about yourself, Q2: explain fractions...", the LLM receives:
+Instead of a fixed list like "Q1: tell me about yourself, Q2: explain team conflict...", the LLM receives:
 - Full conversation history
 - List of uncovered assessment dimensions
 - What the candidate just said
@@ -341,6 +369,23 @@ All prompts follow a **modular, single-job** philosophy:
 
 **Philosophy:** "Code owns decisions, LLM only generates words" — no routing or branching logic inside prompts.
 
+### Code-Owns-Decisions Core Implementation
+To ensure maximum reliability and predictability, all business rules and assessment calculations are owned by Python code, not the LLM:
+- **Score Clamping:** All dimension scores parsed from LLM JSON are clamped to `[1.0, 10.0]` range.
+- **Python-Calculated Averages:** Overall score is dynamically calculated as the average of the 5 dimensions inside Python, ignoring the LLM's self-calculated overall score.
+- **Deterministic Recommendation:** Hiring recommendations are calculated via strict score thresholds:
+  - `>= 7.5` → `"Move to next round"`
+  - `5.0–7.4` → `"Consider with reservations"`
+  - `< 5.0` → `"Do not move forward"`
+- **Evidence-Based Confidence Overrides:** Confidence per dimension is overridden in code based on keyword and candidate word-count evidence in the transcript:
+  - `High` → `>= 80` candidate words referencing the dimension's domain.
+  - `Medium` → `20` to `79` candidate words.
+  - `Low` → `< 20` candidate words. If 3+ dimensions have low confidence, the `"insufficient_data"` flag is added automatically.
+
+### Adaptive Time-Limit Control
+- **Countdown Enforcement:** The backend parses the `"MM:SS"` countdown timer from the frontend on every message.
+- **Server-Side Force Wrap-Up:** If the timer reaches `30 seconds` or less, the system halts normal questions and triggers an immediate, server-side wrap-up to conclude the interview gracefully.
+
 ### Assessment Transcript Cleaning & Integrity
 Before sending to the assessment LLM, the transcript is cleaned:
 - `[Candidate chose to end interview early]` markers removed
@@ -348,7 +393,6 @@ Before sending to the assessment LLM, the transcript is cleaned:
 - **Zero-Data Guardrail:** If the transcript contains no substantive candidate response, the system triggers an automatic fail without calling the LLM to prevent hallucinations.
 - **Data Sufficiency Check:** Minimum word count and turn-count checks ensure the LLM has evidence before scoring.
 - **Flags Array:** Data quality issues tracked: `zero_data_detected`, `insufficient_data`, `limited_transcript`, `assessment_parsing_error`, `off_topic_heavy`
-- **Confidence Levels:** Each dimension gets `high|medium|low` confidence based on evidence strength
 - **Evidence Quotes:** Every score backed by a direct transcript quote for auditability
 
 ---
@@ -357,7 +401,7 @@ Before sending to the assessment LLM, the transcript is cleaned:
 
 | Situation | How It's Handled |
 |---|---|
-| "Can you repeat that?" | Sarah warmly repeats the last question exactly |
+| "Can you repeat that?" | Intercepted in Python — warmly repeats the last question immediately without calling the LLM |
 | "I don't know" (repeated) | After 2 in a row, Sarah moves on gracefully without pressure |
 | Candidate ends early | Immediate wrap-up + report generated from partial interview |
 | Very short answer (< 12 words) | Classified as `short` → follow-up question triggered |
