@@ -23,10 +23,14 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     organization_id = Column(String(36), ForeignKey("organization.id"), nullable=True)
     company_name = Column(String(255), nullable=True)
+    role = Column(String(50), nullable=False, default="recruiter")
+    temp_password = Column(String(255), nullable=True)
+    mail_sent = Column(Boolean, default=False)
+    created_by_id = Column(String(36), ForeignKey("user.id"), nullable=True)
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
-    sessions = relationship("Session", back_populates="owner")
+    sessions = relationship("Session", back_populates="owner", foreign_keys="[Session.owner_id]")
     notes = relationship("SessionNote", back_populates="author")
 
 
@@ -58,6 +62,7 @@ class Session(Base):
     interview_state = Column(Text, nullable=True)  # JSON stringified InterviewState (Phase 3)
     organization_id = Column(String(36), ForeignKey("organization.id"), nullable=True)
     owner_id = Column(String(36), ForeignKey("user.id"), nullable=True)
+    candidate_user_id = Column(String(36), ForeignKey("user.id"), nullable=True)
     # Denormalized for fast dashboard queries (written when assessment is saved)
     overall_score = Column(Float, nullable=True, index=True)
     recommendation = Column(String(100), nullable=True, index=True)
@@ -66,7 +71,8 @@ class Session(Base):
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
     assessment = relationship("Assessment", back_populates="session", uselist=False, cascade="all, delete-orphan")
     organization = relationship("Organization", back_populates="sessions")
-    owner = relationship("User", back_populates="sessions")
+    owner = relationship("User", back_populates="sessions", foreign_keys=[owner_id])
+    candidate_user = relationship("User", foreign_keys=[candidate_user_id])
     notes = relationship("SessionNote", back_populates="session", cascade="all, delete-orphan")
 
 

@@ -17,10 +17,35 @@ const MIC_MAX_SECONDS = 60;
 const INTERVIEW_TOTAL_SECONDS = 600; // 10-minute interview
 let interviewToken = null;
 
+let currentUser = null;
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   interviewToken = urlParams.get('token');
+
+  // Enforce auth check
+  try {
+    currentUser = await checkAuth();
+    if (currentUser.role === 'candidate') {
+      const nameInput = document.getElementById('candidate-name');
+      const emailInput = document.getElementById('candidate-email');
+      if (nameInput) {
+        nameInput.value = currentUser.full_name || '';
+        nameInput.disabled = true;
+        nameInput.style.opacity = '0.7';
+      }
+      if (emailInput) {
+        emailInput.value = currentUser.email || '';
+        emailInput.disabled = true;
+        emailInput.style.opacity = '0.7';
+      }
+    }
+  } catch (e) {
+    // If not authenticated, redirect to candidate login
+    window.location.href = 'candidate_login.html';
+    return;
+  }
 
   const isSupported = /Chrome|Chromium|Edg/.test(navigator.userAgent);
   if (!isSupported) {
@@ -316,7 +341,12 @@ async function sendAnswer(text) {
       await UI.delay(2000);
       UI.showGeneratingScreen();
       clearInterval(timerInterval);
-      pollForReport();
+      
+      if (currentUser && currentUser.role === 'candidate') {
+        window.location.href = `thankyou.html?candidate_name=${encodeURIComponent(currentUser.full_name)}`;
+      } else {
+        pollForReport();
+      }
     } else {
       await showAriaMessage(data.interviewer_response, true);
     }

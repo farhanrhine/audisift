@@ -27,18 +27,29 @@ class UserRead(schemas.BaseUser[str]):
     """User schema for reading."""
     full_name: str
     company_name: Optional[str] = None
+    role: str
+    temp_password: Optional[str] = None
+    mail_sent: Optional[bool] = False
+    created_by_id: Optional[str] = None
 
 
 class UserCreate(schemas.BaseUserCreate):
     """User schema for creation."""
     full_name: str
     company_name: Optional[str] = None
+    role: Optional[str] = "recruiter"
+    temp_password: Optional[str] = None
+    mail_sent: Optional[bool] = False
+    created_by_id: Optional[str] = None
 
 
 class UserUpdate(schemas.BaseUserUpdate):
     """User schema for update."""
     full_name: Optional[str] = None
     company_name: Optional[str] = None
+    role: Optional[str] = None
+    temp_password: Optional[str] = None
+    mail_sent: Optional[bool] = None
 
 
 async def get_user_db(session: AsyncSession = Depends(lambda: AsyncSessionLocal())):
@@ -87,3 +98,15 @@ fastapi_users = FastAPIUsers(
 current_active_user = fastapi_users.current_user(active=True)
 current_superuser = fastapi_users.current_user(active=True, superuser=True)
 current_active_user_optional = fastapi_users.current_user(active=True, optional=True)
+
+
+from fastapi import HTTPException
+
+async def get_current_recruiter(user: User = Depends(current_active_user)) -> User:
+    """Dependency to check if the user is a recruiter or superuser."""
+    if getattr(user, "role", "recruiter") != "recruiter" and not user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Only recruiters can access this resource."
+        )
+    return user

@@ -349,6 +349,27 @@ function scoreClass(score) {
   return 'low';
 }
 
+async function initReport() {
+  try {
+    const user = await checkAuth();
+    if (user.role !== 'recruiter' && !user.is_superuser) {
+      document.body.innerHTML = `
+        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--paper); font-family: var(--font-body); padding: 20px;">
+          <div style="max-width: 400px; text-align: center;">
+            <h1 class="font-display" style="color: var(--danger); font-size: 2rem; margin-bottom: 12px;">Access Denied</h1>
+            <p style="color: var(--ink-soft); margin-bottom: 24px;">Only recruiters are authorized to view candidate assessment reports.</p>
+            <a href="login.html" class="btn btn-primary" style="text-decoration:none;">Sign in as Recruiter</a>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    loadReport();
+  } catch (e) {
+    window.location.href = 'login.html';
+  }
+}
+
 async function loadReport() {
   const sid = getSessionId();
   if (!sid) {
@@ -356,12 +377,19 @@ async function loadReport() {
     return;
   }
 
+  const token = getToken();
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
   // Poll until ready
   const maxAttempts = 20;
   let attempts = 0;
   while (attempts < maxAttempts) {
     try {
-      const res = await fetch(`/api/session/report/${sid}`);
+      const res = await fetch(`/api/session/report/${sid}`, { headers });
+      if (res.status === 403 || res.status === 401) {
+        document.getElementById('loading').innerHTML = '<p style="color:var(--danger)">Access denied. You do not have permissions to view this report.</p>';
+        return;
+      }
       const data = await res.json();
       if (data.status === 'ready') {
         renderReport(data.report, sid);
@@ -475,7 +503,9 @@ async function renderReport(report, sessionId) {
 
   // Transcript
   try {
-    const tRes = await fetch(`/api/session/history/${sessionId}`);
+    const token = getToken();
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const tRes = await fetch(`/api/session/history/${sessionId}`, { headers });
     const tData = await tRes.json();
     const msgs = document.getElementById('transcript-messages');
     msgs.innerHTML = '';
@@ -511,7 +541,7 @@ function escapeHtml(text) {
   return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-loadReport();
+initReport();
 </script>
 </body>
 </html>

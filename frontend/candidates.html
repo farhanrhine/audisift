@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Candidate Management — AI Candidate Screener</title>
+  <meta name="description" content="Generate and manage candidate accounts, credentials, and email delivery." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/theme.js"></script>
+  <script src="js/auth.js"></script>
+  <style>
+    .page { position: relative; z-index: 1; min-height: 100vh; }
+
+    /* NAV */
+    .nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.25rem 2rem; border-bottom: 1px solid var(--border);
+      background: var(--paper);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-left { display: flex; align-items: center; gap: 12px; }
+    .nav-logo-icon { width: 28px; height: 28px; color: var(--accent); }
+    .nav-logo-icon svg { width: 100%; height: 100%; stroke-width: 2px; }
+    .nav-text { font-family: var(--font-display); font-size: 1.25rem; color: var(--ink); line-height: 1; margin-bottom: 2px; }
+    .nav-sub  { font-size: 0.70rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .nav-user { font-size: 0.88rem; font-weight: 500; color: var(--ink-soft); }
+
+    /* MAIN */
+    main { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    /* PAGE HEADER */
+    .page-header {
+      display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 36px; flex-wrap: wrap; gap: 16px;
+    }
+    .page-header h1 { margin-bottom: 4px; }
+    .page-header p { font-size: 1rem; color: var(--ink-soft); }
+
+    /* ACTIONS ROW */
+    .actions-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 36px;
+    }
+    @media (max-width: 768px) {
+      .actions-grid { grid-template-columns: 1fr; }
+    }
+
+    /* CARD STYLING */
+    .card-title {
+      font-family: var(--font-display); font-size: 1.4rem; color: var(--ink); margin-bottom: 12px;
+    }
+    .card-desc {
+      font-size: 0.9rem; color: var(--ink-soft); margin-bottom: 20px; line-height: 1.5;
+    }
+
+    /* TEXTAREA & CSV DRAG */
+    .paste-area {
+      width: 100%; height: 120px; padding: 12px; border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); font-family: monospace; font-size: 0.85rem;
+      background: var(--paper-warm); color: var(--ink); resize: none; margin-bottom: 16px;
+      box-sizing: border-box;
+    }
+    .paste-area:focus {
+      outline: none; border-color: var(--accent); background: var(--paper-card);
+    }
+    
+    .file-input-wrap {
+      border: 2px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 20px; text-align: center; background: var(--paper-warm);
+      cursor: pointer; transition: var(--transition); position: relative;
+      margin-bottom: 16px;
+    }
+    .file-input-wrap:hover {
+      border-color: var(--ink); background: var(--paper-card);
+    }
+    .file-input-wrap p { font-size: 0.88rem; color: var(--ink-soft); font-weight: 500; pointer-events: none; }
+    .file-input-wrap input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+
+    /* TABLE */
+    .table-card { overflow: hidden; background: var(--paper-card); border: 1px solid var(--border); box-shadow: var(--shadow-card); border-radius: var(--radius-md); }
+    .table-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 28px; border-bottom: 1px solid var(--border);
+    }
+    .table-header h2 { font-size: 1.2rem; font-weight: 600; margin: 0; }
+    .table-count { font-size: 0.85rem; font-weight: 500; color: var(--ink-muted); }
+
+    .candidates-table { width: 100%; border-collapse: collapse; }
+    .candidates-table th {
+      padding: 14px 28px; text-align: left; font-size: 0.72rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);
+      border-bottom: 1px solid var(--border-soft); background: var(--paper-warm);
+    }
+    .candidates-table td {
+      padding: 16px 28px; font-size: 0.95rem; color: var(--ink);
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: middle;
+    }
+    .candidates-table tr:hover td { background: var(--paper-warm); }
+    .candidates-table tr:last-child td { border-bottom: none; }
+
+    .pw-badge {
+      font-family: monospace; font-size: 0.9rem; background: var(--paper-warm);
+      border: 1px solid var(--border); padding: 2px 6px; border-radius: var(--radius-sm);
+      color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .copy-btn {
+      background: none; border: none; cursor: pointer; color: var(--ink-muted);
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 2px; border-radius: 4px; transition: var(--transition);
+    }
+    .copy-btn:hover { color: var(--ink); background: var(--border-soft); }
+    .copy-btn svg { width: 12px; height: 12px; }
+
+    /* Auth loading overlay */
+    #auth-loading {
+      position: fixed; inset: 0; background: var(--paper);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .auth-spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Message banner */
+    .banner-notification {
+      padding: 12px 16px; border-radius: var(--radius-sm); font-size: 0.9rem;
+      margin-bottom: 20px; font-weight: 500; display: none;
+    }
+    .banner-success { background: rgba(43, 122, 80, 0.08); color: var(--accent-green); border: 1px solid rgba(43, 122, 80, 0.2); }
+    .banner-error { background: var(--danger-light); color: var(--danger); border: 1px solid rgba(229, 43, 80, 0.2); }
+  </style>
+</head>
+<body>
+<div id="auth-loading"><div class="auth-spinner"></div></div>
+<div class="page" id="main-page" style="display:none">
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-left">
+      <div class="nav-logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" class="icon"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5M12 19v3M8 22h8"/></svg>
+      </div>
+      <div>
+        <div class="nav-text">AI Screener</div>
+        <div class="nav-sub">Corporate Assessment</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <span class="nav-user" id="nav-user-name"></span>
+      <a href="dashboard.html" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; font-weight:600; text-decoration:none;">Dashboard</a>
+      <a href="candidates.html" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; font-weight:600; text-decoration:none; border-bottom: 2px solid var(--accent); border-radius: 0;">Candidates</a>
+      <a href="index.html" class="btn btn-primary" style="padding:10px 20px; text-decoration:none; display:flex; align-items:center; gap:6px;">
+        <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Interview
+      </a>
+      <button onclick="logout()" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px;" title="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </button>
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Theme">
+        <svg viewBox="0 0 24 24" fill="none" class="icon theme-toggle-icon"></svg>
+      </button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Page Header -->
+    <div class="page-header animate-fadeIn">
+      <div>
+        <h1 class="font-display">Candidates</h1>
+        <p>Generate accounts and distribute credentials for assessment interviews</p>
+      </div>
+    </div>
+
+    <div id="notif-banner" class="banner-notification animate-fadeIn"></div>
+
+    <!-- Actions Area -->
+    <div class="actions-grid">
+      <!-- Input Panel -->
+      <div class="card animate-fadeIn" style="animation-delay: 0.1s;">
+        <div class="card-title">Bulk Generate Accounts</div>
+        <div class="card-desc">Enter candidates (one per line) as <code>email, Full Name</code>. Passwords will be automatically generated.</div>
+        
+        <textarea id="candidates-input" class="paste-area" placeholder="john.doe@company.com, John Doe&#10;jane.smith@company.com, Jane Smith"></textarea>
+        
+        <button onclick="generateFromText()" id="generate-btn" class="btn btn-primary" style="width:100%; justify-content:center;">
+          Generate Candidate Accounts
+        </button>
+      </div>
+
+      <!-- CSV Upload Panel -->
+      <div class="card animate-fadeIn" style="animation-delay: 0.2s;">
+        <div class="card-title">Import CSV file</div>
+        <div class="card-desc">Upload a CSV file containing columns <code>email</code> and <code>name</code> to quickly load candidate details.</div>
+        
+        <div class="file-input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:32px; height:32px; color:var(--ink-soft); margin-bottom:8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p id="csv-label">Drag & drop CSV or click to browse</p>
+          <input type="file" id="csv-file-input" accept=".csv" onchange="handleCSVUpload(event)" />
+        </div>
+        
+        <div style="height:12px"></div>
+        <div style="font-size:0.8rem; color:var(--ink-muted); text-align:center; font-weight:500;">
+          First row must contain header columns (e.g. <code>email,name</code> or <code>email,full_name</code>)
+        </div>
+      </div>
+    </div>
+
+    <!-- Candidates Table -->
+    <div class="card table-card animate-fadeIn" style="animation-delay:0.3s">
+      <div class="table-header">
+        <h2 class="font-display">Generated Candidates</h2>
+        <div style="display:flex; align-items:center; gap:16px;">
+          <span id="table-count" class="table-count">0 candidates</span>
+          <button onclick="sendBulkEmails()" id="bulk-email-btn" class="btn btn-primary" style="padding:8px 16px; font-size:0.88rem; display:flex; align-items:center; gap:6px;">
+            <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:14px; height:14px;"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Bulk Invites (Unsent Only)
+          </button>
+        </div>
+      </div>
+
+      <div id="table-body">
+        <!-- Loader -->
+        <div style="padding:40px; text-align:center;">
+          <div class="auth-spinner" style="margin:auto; width:30px; height:30px;"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let currentUser = null;
+let candidatesList = [];
+
+// ---------------------------------------------------------------
+// Auth guard
+// ---------------------------------------------------------------
+async function initCandidates() {
+  try {
+    currentUser = await checkAuth();
+    if (currentUser.role !== 'recruiter' && !currentUser.is_superuser) {
+      // Access Denied for candidates
+      window.location.href = 'candidate_login.html';
+      return;
+    }
+    const nameEl = document.getElementById('nav-user-name');
+    if (nameEl && currentUser.full_name) {
+      nameEl.textContent = currentUser.full_name;
+    }
+    document.getElementById('auth-loading').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+    
+    // Load candidates list
+    loadCandidates();
+  } catch (e) {
+    window.location.href = 'login.html';
+  }
+}
+
+// ---------------------------------------------------------------
+// API fetching wrapper
+// ---------------------------------------------------------------
+function authFetch(url, options = {}) {
+  const token = getToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}
+
+// ---------------------------------------------------------------
+// Candidates Data List
+// ---------------------------------------------------------------
+async function loadCandidates() {
+  try {
+    const res = await authFetch('/api/candidates');
+    if (res.status === 401) { window.location.href = 'login.html'; return; }
+    if (!res.ok) throw new Error('Failed to load candidates');
+    const data = await res.json();
+    candidatesList = data.candidates || [];
+    
+    renderCandidatesTable();
+  } catch (err) {
+    console.error(err);
+    showBanner('Failed to load candidate list.', true);
+  }
+}
+
+function renderCandidatesTable() {
+  const tableBody = document.getElementById('table-body');
+  document.getElementById('table-count').textContent = `${candidatesList.length} candidate${candidatesList.length !== 1 ? 's' : ''}`;
+  
+  if (candidatesList.length === 0) {
+    tableBody.innerHTML = `
+      <div style="padding:60px 40px; text-align:center; color:var(--ink-muted);">
+        <h3 class="font-display" style="margin-bottom:8px;">No candidate accounts generated</h3>
+        <p style="font-size:0.95rem;">Enter emails above to generate credentials.</p>
+      </div>`;
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'candidates-table';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Candidate Details</th>
+        <th>Login Password</th>
+        <th>Mail Delivery</th>
+        <th style="text-align:right">Action</th>
+      </tr>
+    </thead>
+    <tbody id="candidates-tbody"></tbody>`;
+
+  tableBody.innerHTML = '';
+  tableBody.appendChild(table);
+
+  const tbody = table.querySelector('#candidates-tbody');
+  
+  candidatesList.forEach(c => {
+    const tr = document.createElement('tr');
+    
+    // Status Badge
+    const mailSentBadge = c.mail_sent
+      ? `<span class="badge badge-green"><svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;margin-right:2px;"><polyline points="20 6 9 17 4 12"/></svg> Sent</span>`
+      : `<span class="badge badge-amber"><svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;vertical-align:-1px;margin-right:2px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Pending</span>`;
+    
+    const pwDisplay = c.temp_password 
+      ? `<span class="pw-badge">${escapeHtml(c.temp_password)} <button class="copy-btn" onclick="copyText('${escapeHtml(c.temp_password)}')" title="Copy password"><svg viewBox="0 0 24 24" fill="none" class="icon"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button></span>`
+      : `<span style="color:var(--ink-muted); font-size:0.85rem; font-style:italic;">Changed or unavailable</span>`;
+    
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:600; color:var(--ink);">${escapeHtml(c.full_name)}</div>
+        <div style="font-size:0.8rem; color:var(--ink-muted); margin-top:2px;">${escapeHtml(c.email)}</div>
+      </td>
+      <td>${pwDisplay}</td>
+      <td>${mailSentBadge}</td>
+      <td style="text-align:right">
+        <button onclick="sendIndividualEmail('${c.id}')" class="btn btn-ghost" style="padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:4px;" ${!c.temp_password ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:12px;height:12px;"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          ${c.mail_sent ? 'Resend' : 'Send Invite'}
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------------------------------------------------------------
+// Generate candidates from textarea
+// ---------------------------------------------------------------
+async function generateFromText() {
+  const inputVal = document.getElementById('candidates-input').value.trim();
+  if (!inputVal) {
+    alert('Please enter at least one candidate (email, name).');
+    return;
+  }
+
+  const lines = inputVal.split('\n');
+  const candidates = [];
+  
+  lines.forEach(line => {
+    const parts = line.split(',');
+    const email = parts[0]?.trim();
+    const name = parts[1]?.trim() || email.split('@')[0]; // fallback to email name prefix if full name missing
+    
+    if (email && email.includes('@')) {
+      candidates.push({ email, full_name: name });
+    }
+  });
+
+  if (candidates.length === 0) {
+    alert('No valid email format found in input. Ensure format is: email, Full Name');
+    return;
+  }
+
+  const generateBtn = document.getElementById('generate-btn');
+  generateBtn.disabled = true;
+  generateBtn.textContent = 'Generating Accounts…';
+
+  try {
+    const res = await authFetch('/api/candidates/bulk-generate', {
+      method: 'POST',
+      body: JSON.stringify({ candidates })
+    });
+    
+    if (!res.ok) throw new Error(await res.text());
+    
+    const data = await res.json();
+    const results = data.candidates || [];
+    
+    const createdCount = results.filter(r => r.status === 'created').length;
+    const existsCount = results.filter(r => r.status === 'already_exists').length;
+    
+    showBanner(`Successfully generated ${createdCount} accounts. (${existsCount} already existed).`, false);
+    
+    // Clear textarea
+    document.getElementById('candidates-input').value = '';
+    
+    // Refresh table
+    loadCandidates();
+  } catch (err) {
+    console.error(err);
+    showBanner('Failed to generate candidate accounts. Please check logs.', true);
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.textContent = 'Generate Candidate Accounts';
+  }
+}
+
+// ---------------------------------------------------------------
+// CSV File Drag / Upload
+// ---------------------------------------------------------------
+function handleCSVUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  document.getElementById('csv-label').textContent = `Reading ${file.name}…`;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    parseCSVText(text);
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVText(csvText) {
+  const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) {
+    alert('CSV file is empty or missing data rows.');
+    resetCSVInput();
+    return;
+  }
+
+  // Parse headers
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const emailIdx = headers.findIndex(h => h === 'email' || h === 'email_address' || h === 'mail');
+  const nameIdx = headers.findIndex(h => h === 'name' || h === 'full_name' || h === 'fullname' || h === 'candidate_name');
+
+  if (emailIdx === -1) {
+    alert('CSV missing "email" column in the header row.');
+    resetCSVInput();
+    return;
+  }
+
+  const candidatesStringList = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(',');
+    const email = row[emailIdx]?.trim();
+    // Use name column or fallback to email local part
+    const name = nameIdx !== -1 ? row[nameIdx]?.trim() : email?.split('@')[0];
+    
+    if (email && email.includes('@')) {
+      candidatesStringList.push(`${email}, ${name}`);
+    }
+  }
+
+  if (candidatesStringList.length === 0) {
+    alert('No valid candidate rows found in the CSV.');
+    resetCSVInput();
+    return;
+  }
+
+  // Populate textarea with parsed CSV rows
+  document.getElementById('candidates-input').value = candidatesStringList.join('\n');
+  document.getElementById('csv-label').textContent = `Loaded ${candidatesStringList.length} candidates from CSV. Review & click Generate below.`;
+}
+
+function resetCSVInput() {
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-label').textContent = 'Drag & drop CSV or click to browse';
+}
+
+// ---------------------------------------------------------------
+// Email Invites
+// ---------------------------------------------------------------
+async function sendBulkEmails() {
+  const bulkBtn = document.getElementById('bulk-email-btn');
+  const unsentList = candidatesList.filter(c => !c.mail_sent && c.temp_password);
+  
+  if (unsentList.length === 0) {
+    alert('No pending unsent candidates to invite.');
+    return;
+  }
+
+  if (!confirm(`Send invitation emails containing login credentials to ${unsentList.length} candidates in the background?`)) {
+    return;
+  }
+
+  bulkBtn.disabled = true;
+  bulkBtn.textContent = 'Queueing Invites…';
+
+  try {
+    const res = await authFetch('/api/candidates/send-email', {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: null }) // null means all unsent
+    });
+    
+    if (!res.ok) throw new Error(await res.text());
+    
+    showBanner(`Successfully queued email invitations in background. Deliveries will update in a moment.`, false);
+    
+    // Refresh list periodically
+    setTimeout(loadCandidates, 3000);
+    setTimeout(loadCandidates, 6000);
+  } catch (err) {
+    console.error(err);
+    showBanner('Failed to send bulk invitations.', true);
+  } finally {
+    bulkBtn.disabled = false;
+    bulkBtn.textContent = 'Send Bulk Invites (Unsent Only)';
+  }
+}
+
+async function sendIndividualEmail(userId) {
+  try {
+    const res = await authFetch('/api/candidates/send-email', {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: [userId] })
+    });
+    
+    if (!res.ok) throw new Error(await res.text());
+    
+    showBanner(`Queueing invitation email to candidate in background.`, false);
+    
+    // Refresh list in a moment
+    setTimeout(loadCandidates, 3000);
+  } catch (err) {
+    console.error(err);
+    showBanner('Failed to send invitation email.', true);
+  }
+}
+
+// ---------------------------------------------------------------
+// UI Helpers
+// ---------------------------------------------------------------
+function showBanner(message, isError = false) {
+  const banner = document.getElementById('notif-banner');
+  banner.textContent = message;
+  banner.style.display = 'block';
+  banner.className = 'banner-notification ' + (isError ? 'banner-error' : 'banner-success');
+  
+  setTimeout(() => {
+    banner.style.display = 'none';
+  }, 6000);
+}
+
+function copyText(str) {
+  navigator.clipboard.writeText(str).then(() => {
+    alert('Password copied to clipboard!');
+  });
+}
+
+function escapeHtml(text) {
+  return (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Start
+initCandidates();
+</script>
+</body>
+</html>

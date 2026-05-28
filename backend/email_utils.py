@@ -175,3 +175,67 @@ def bulk_links_email(
     </html>
     """
     return html
+
+
+def candidate_invite_email(
+    candidate_name: str,
+    email: str,
+    password: str,
+    login_url: str,
+) -> str:
+    """Generate HTML email for candidate invitation."""
+    html = f"""
+    <html>
+      <head>
+        <style>
+          body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; }}
+          .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+          .header {{ background: linear-gradient(135deg, #111 0%, #333 100%); color: white; padding: 40px 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+          .content {{ background: #f9f9f9; padding: 30px 20px; border-radius: 0 0 8px 8px; border: 1px solid #eee; }}
+          .info-box {{ background: white; padding: 20px; border-radius: 6px; margin: 20px 0; border: 1px solid #ddd; }}
+          .info-row {{ margin: 10px 0; font-size: 16px; }}
+          .info-label {{ font-weight: bold; color: #666; display: inline-block; width: 100px; }}
+          .info-value {{ font-family: monospace; font-size: 16px; background: #eee; padding: 2px 6px; border-radius: 4px; }}
+          .button {{ display: inline-block; padding: 12px 30px; background: #e52b50; color: white !important; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }}
+          .footer {{ text-align: center; color: #999; font-size: 12px; margin-top: 20px; }}
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>AI Screening Interview Invitation</h1>
+            <p>Hello {candidate_name}, you have been invited to take a screening interview.</p>
+          </div>
+          <div class="content">
+            <p>You have been invited to participate in an automated voice screening interview using Sarah, our AI Interviewer.</p>
+            <p>The interview takes approximately 10 minutes. Please ensure you are in a quiet room with a functioning microphone. For the best experience, use Google Chrome or Microsoft Edge.</p>
+            
+            <div class="info-box">
+              <div class="info-row">
+                <span class="info-label">Email:</span>
+                <span class="info-value" style="background: none; padding: 0;">{email}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Password:</span>
+                <span class="info-value">{password}</span>
+              </div>
+            </div>
+            
+            <p>Click the button below to sign in and begin your interview:</p>
+            <center>
+              <a href="{login_url}" class="button">Login & Start Interview &rarr;</a>
+            </center>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              If you have any issues logging in, please contact the recruiter who shared this invitation.
+            </p>
+          </div>
+          <div class="footer">
+            <p>AI Candidate Screener</p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+    return html
+

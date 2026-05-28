@@ -41,17 +41,61 @@ async def init_db():
         sync_db_url = DATABASE_URL.replace("sqlite+aiosqlite", "sqlite")
         sync_engine = create_engine(sync_db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(sync_engine)
-        # Dynamically add company_name column if it doesn't exist
-        try:
-            with sync_engine.connect() as conn:
+        # Dynamically add columns if they don't exist
+        with sync_engine.connect() as conn:
+            try:
                 conn.execute("ALTER TABLE user ADD COLUMN company_name VARCHAR(255)")
-        except Exception:
-            pass  # Already exists or table not ready
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE user ADD COLUMN role VARCHAR(50) DEFAULT 'recruiter'")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE user ADD COLUMN temp_password VARCHAR(255)")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE user ADD COLUMN mail_sent BOOLEAN DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE user ADD COLUMN created_by_id VARCHAR(36)")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE session ADD COLUMN candidate_user_id VARCHAR(36)")
+            except Exception:
+                pass
         sync_engine.dispose()
     else:
         # For PostgreSQL, use async
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            try:
+                await conn.execute("ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)")
+            except Exception:
+                pass
+            try:
+                await conn.execute("ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'recruiter'")
+            except Exception:
+                pass
+            try:
+                await conn.execute("ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS temp_password VARCHAR(255)")
+            except Exception:
+                pass
+            try:
+                await conn.execute("ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS mail_sent BOOLEAN DEFAULT FALSE")
+            except Exception:
+                pass
+            try:
+                await conn.execute("ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS created_by_id VARCHAR(36)")
+            except Exception:
+                pass
+            try:
+                await conn.execute("ALTER TABLE \"session\" ADD COLUMN IF NOT EXISTS candidate_user_id VARCHAR(36)")
+            except Exception:
+                pass
 
 
 async def get_session_obj() -> AsyncSession:
@@ -63,7 +107,7 @@ async def get_session_obj() -> AsyncSession:
 # --------- Session Management ---------
 
 
-async def create_session(candidate_name: str, candidate_email: str = None, organization_id: str = None, owner_id: str = None) -> str:
+async def create_session(candidate_name: str, candidate_email: str = None, organization_id: str = None, owner_id: str = None, candidate_user_id: str = None) -> str:
     """Create a new interview session."""
     async with AsyncSessionLocal() as db:
         session = Session(
@@ -71,6 +115,7 @@ async def create_session(candidate_name: str, candidate_email: str = None, organ
             candidate_email=candidate_email,
             organization_id=organization_id,
             owner_id=owner_id,
+            candidate_user_id=candidate_user_id,
             status="in_progress",
         )
         db.add(session)
@@ -321,3 +366,25 @@ async def get_bulk_links_for_user(user_id: str, limit: int = 100) -> list[BulkLi
             .limit(limit)
         )
         return result.scalars().all()
+
+
+async def get_candidates_for_recruiter(owner_id: str) -> list[User]:
+    """Get all candidates created by a recruiter."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(User)
+            .where(User.created_by_id == owner_id, User.role == "candidate")
+            .order_by(User.created_at.desc())
+        )
+        return result.scalars().all()
+
+
+async def update_candidate_mail_sent(user_id: str, mail_sent: bool):
+    """Update candidate mail sent status."""
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(mail_sent=mail_sent)
+        )
+        await db.commit()

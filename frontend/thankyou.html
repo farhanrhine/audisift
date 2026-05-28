@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview Submitted — AI Candidate Screener</title>
+  <meta name="description" content="Thank you for completing your screening interview." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/theme.js"></script>
+  <style>
+    .thankyou-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      background: var(--paper);
+    }
+
+    .thankyou-wrap {
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
+    }
+
+    .success-icon-wrap {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: rgba(43, 122, 80, 0.08);
+      border: 2px solid var(--accent-green);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent-green); margin: 0 auto 30px;
+      box-shadow: 0 8px 24px rgba(43,122,80,0.05);
+    }
+    .success-icon-wrap svg { width: 36px; height: 36px; stroke-width: 2.5px; }
+
+    .thankyou-card {
+      background: var(--paper-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 50px 40px;
+      box-shadow: var(--shadow-hover);
+    }
+
+    .thankyou-card h1 {
+      font-family: var(--font-display);
+      font-size: 2.4rem;
+      color: var(--ink);
+      margin-bottom: 16px;
+      text-transform: capitalize;
+    }
+    .thankyou-text {
+      color: var(--ink-soft);
+      font-size: 1.05rem;
+      line-height: 1.7;
+      margin-bottom: 30px;
+    }
+
+    .candidate-info-note {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      border-top: 1px solid var(--border-soft);
+      padding-top: 24px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+<div class="thankyou-page">
+  <div class="thankyou-wrap animate-fadeIn">
+
+    <div class="thankyou-card">
+      <div class="success-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" class="icon"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+
+      <h1 id="headline">Thank you!</h1>
+      <p class="thankyou-text" id="message">
+        Your voice screening interview has been completed and submitted successfully. 
+        Your responses are saved, and the recruitment team has been notified.
+      </p>
+
+      <div class="candidate-info-note">
+        You may now safely close this browser window. We appreciate your time!
+      </div>
+    </div>
+
+    <div style="text-align:center; margin-top:28px;">
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Theme" style="margin:auto;">
+        <svg viewBox="0 0 24 24" fill="none" class="icon theme-toggle-icon"></svg>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+window.addEventListener('load', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const name = urlParams.get('candidate_name');
+  if (name) {
+    document.getElementById('headline').textContent = `Thank you, ${name}!`;
+    document.getElementById('message').innerHTML = `
+      Your voice screening interview has been completed and submitted successfully.<br>
+      Sarah has finished processing your answers, and your recruitment team has been notified.
+    `;
+  }
+  
+  // Clear access token so they can't re-enter index.html without logging in again
+  localStorage.removeItem('access_token');
+});
+</script>
+</body>
+</html>

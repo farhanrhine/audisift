@@ -37,11 +37,13 @@ try:
         get_bulk_link,
         use_bulk_link,
         get_bulk_links_for_user,
+        get_candidates_for_recruiter,
+        update_candidate_mail_sent,
     )
     from backend.conversation import create_engine
     from backend.assessment import generate_assessment
     from backend.transcription import AudioBuffer
-    from backend.email_utils import send_email, assessment_complete_email, bulk_links_email
+    from backend.email_utils import send_email, assessment_complete_email, bulk_links_email, candidate_invite_email
     from backend.auth import (
         fastapi_users, 
         current_active_user, 
@@ -51,6 +53,8 @@ try:
         UserCreate,
         UserUpdate,
         current_active_user_optional,
+        get_current_recruiter,
+        get_user_manager,
     )
     from backend.models import User
     from backend.config import SENTRY_DSN
@@ -73,10 +77,12 @@ except ImportError:
         get_bulk_link,
         use_bulk_link,
         get_bulk_links_for_user,
+        get_candidates_for_recruiter,
+        update_candidate_mail_sent,
     )
     from conversation import create_engine
     from assessment import generate_assessment
-    from email_utils import send_email, assessment_complete_email, bulk_links_email
+    from email_utils import send_email, assessment_complete_email, bulk_links_email, candidate_invite_email
     from auth import (
         fastapi_users, 
         current_active_user, 
@@ -86,6 +92,8 @@ except ImportError:
         UserCreate,
         UserUpdate,
         current_active_user_optional,
+        get_current_recruiter,
+        get_user_manager,
     )
     from models import User
     from config import SENTRY_DSN
@@ -255,10 +263,15 @@ async def start_session(
 
     email = req.candidate_email.strip() if req.candidate_email else None
     
-    # Resolve recruiter owner
+    # Resolve recruiter owner and candidate user ID
     owner_id = None
+    candidate_user_id = None
     if current_user:
-        owner_id = current_user.id
+        if getattr(current_user, "role", "recruiter") == "candidate":
+            owner_id = current_user.created_by_id
+            candidate_user_id = current_user.id
+        else:
+            owner_id = current_user.id
     elif req.token:
         bulk_link = await get_bulk_link(req.token)
         if bulk_link and not bulk_link.used_at:
@@ -267,7 +280,8 @@ async def start_session(
     session_id = await create_session(
         candidate_name=req.candidate_name.strip(),
         candidate_email=email,
-        owner_id=owner_id
+        owner_id=owner_id,
+        candidate_user_id=candidate_user_id
     )
     
     # Mark bulk link as used if applicable
@@ -411,8 +425,11 @@ async def websocket_transcribe(websocket: WebSocket, session_id: str):
 
 
 @app.get("/api/session/report/{session_id}")
-async def get_report(session_id: str):
-    """Get interview report (public endpoint)."""
+async def get_report(
+    session_id: str,
+    current_user: User = Depends(get_current_recruiter)
+):
+    """Get interview report (recruiter only)."""
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -427,8 +444,11 @@ async def get_report(session_id: str):
 
 
 @app.get("/api/session/history/{session_id}")
-async def get_history(session_id: str):
-    """Get interview history (public endpoint)."""
+async def get_history(
+    session_id: str,
+    current_user: User = Depends(get_current_recruiter)
+):
+    """Get interview history (recruiter only)."""
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -451,7 +471,7 @@ async def get_history(session_id: str):
 # ============================================
 
 @app.get("/api/dashboard")
-async def dashboard(current_user: User = Depends(current_active_user)):
+async def dashboard(current_user: User = Depends(get_current_recruiter)):
     """Get dashboard stats and sessions list (recruiter only)."""
     owner_id = None if current_user.is_superuser else current_user.id
     sessions_list = await get_all_sessions(owner_id=owner_id)
@@ -485,7 +505,7 @@ async def dashboard(current_user: User = Depends(current_active_user)):
 
 
 @app.get("/api/stats")
-async def get_stats(current_user: User = Depends(current_active_user)):
+async def get_stats(current_user: User = Depends(get_current_recruiter)):
     """Get comprehensive dashboard statistics (recruiter only)."""
     owner_id = None if current_user.is_superuser else current_user.id
     sessions_list = await get_all_sessions(owner_id=owner_id, limit=10000)
@@ -539,7 +559,7 @@ async def get_stats(current_user: User = Depends(current_active_user)):
 
 @app.get("/api/sessions")
 async def list_sessions(
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
     status: str = Query(None),
     score_min: float = Query(None),
     score_max: float = Query(None),
@@ -613,7 +633,7 @@ async def list_sessions(
 
 @app.get("/api/sessions/export/csv")
 async def export_sessions_csv(
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
     status: str = Query(None),
     recommendation: str = Query(None),
 ):
@@ -668,7 +688,7 @@ async def export_sessions_csv(
 @app.get("/api/sessions/{session_id}/report")
 async def get_full_report(
     session_id: str,
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
 ):
     """Get full assessment report for a session (recruiter only)."""
     session = await get_session(session_id)
@@ -714,7 +734,7 @@ async def delete_session(
 async def add_note(
     session_id: str,
     note: SessionNoteRequest,
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
 ):
     """Add a note to a session (recruiter only)."""
     session = await get_session(session_id)
@@ -728,7 +748,7 @@ async def add_note(
 @app.get("/api/sessions/{session_id}/notes")
 async def get_notes(
     session_id: str,
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
 ):
     """Get all notes for a session (recruiter only)."""
     session = await get_session(session_id)
@@ -769,7 +789,7 @@ class BulkLinkResponse(BaseModel):
 @app.post("/api/interviews/bulk-generate")
 async def bulk_generate_links(
     req: BulkLinkRequest,
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
 ) -> BulkLinkResponse:
     """
     Generate bulk interview links for recruiter distribution (Phase 8).
@@ -809,7 +829,7 @@ async def bulk_generate_links(
 
 @app.get("/api/interviews/bulk-links")
 async def get_bulk_links(
-    current_user: User = Depends(current_active_user),
+    current_user: User = Depends(get_current_recruiter),
 ):
     """
     Get all bulk links created by the current user (Phase 8).
@@ -828,6 +848,181 @@ async def get_bulk_links(
             for link in links
         ],
     }
+
+
+# ============================================
+# CANDIDATE MANAGEMENT (Role splitting)
+# ============================================
+
+class CandidateCreateItem(BaseModel):
+    email: str
+    full_name: str
+
+class BulkCandidateCreateRequest(BaseModel):
+    candidates: list[CandidateCreateItem]
+
+class SendCandidateEmailRequest(BaseModel):
+    user_ids: list[str] | None = None  # None means send to all unsent for this recruiter
+
+import string
+import random
+
+def generate_random_password(length=8) -> str:
+    chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(random.choice(chars) for _ in range(length))
+
+@app.post("/api/candidates/bulk-generate")
+async def bulk_generate_candidates(
+    req: BulkCandidateCreateRequest,
+    current_user: User = Depends(get_current_recruiter),
+    user_manager = Depends(get_user_manager)
+):
+    """Bulk generate candidate credentials (recruiter only)."""
+    from fastapi_users.exceptions import UserAlreadyExists
+    
+    created_candidates = []
+    
+    for cand in req.candidates:
+        email = cand.email.strip().lower()
+        name = cand.full_name.strip()
+        if not email or not name:
+            continue
+            
+        temp_pw = generate_random_password()
+        
+        try:
+            # We must use fastapi_users structure
+            user_create = UserCreate(
+                email=email,
+                password=temp_pw,
+                full_name=name,
+                role="candidate",
+                company_name=current_user.company_name
+            )
+            # Create user via fastapi-users manager (hashes password)
+            user = await user_manager.create(user_create, safe=True)
+            
+            # Update temporary password, created_by_id, and mail_sent in the DB
+            from backend.database import AsyncSessionLocal
+            from backend.models import User as DBUser
+            from sqlalchemy import update as sql_update
+            
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    sql_update(DBUser)
+                    .where(DBUser.id == user.id)
+                    .values(
+                        temp_password=temp_pw,
+                        created_by_id=current_user.id,
+                        mail_sent=False
+                    )
+                )
+                await db.commit()
+                
+            created_candidates.append({
+                "id": user.id,
+                "email": email,
+                "full_name": name,
+                "temp_password": temp_pw,
+                "mail_sent": False,
+                "status": "created"
+            })
+        except UserAlreadyExists:
+            created_candidates.append({
+                "email": email,
+                "full_name": name,
+                "status": "already_exists"
+            })
+        except Exception as e:
+            created_candidates.append({
+                "email": email,
+                "full_name": name,
+                "status": f"error: {str(e)}"
+            })
+            
+    return {"candidates": created_candidates}
+
+@app.get("/api/candidates")
+async def get_candidates(
+    current_user: User = Depends(get_current_recruiter)
+):
+    """List all candidate accounts generated by the current recruiter (recruiter only)."""
+    candidates = await get_candidates_for_recruiter(current_user.id)
+    return {
+        "candidates": [
+            {
+                "id": c.id,
+                "email": c.email,
+                "full_name": c.full_name,
+                "temp_password": c.temp_password,
+                "mail_sent": c.mail_sent,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in candidates
+        ]
+    }
+
+async def send_bulk_invitations_task(candidates_to_email: list[dict], base_url: str):
+    """Background task to send credential emails to candidates and update status."""
+    for c in candidates_to_email:
+        email = c["email"]
+        name = c["full_name"]
+        temp_pw = c["temp_password"]
+        user_id = c["id"]
+        
+        login_url = f"{base_url}candidate_login.html"
+        html = candidate_invite_email(
+            candidate_name=name,
+            email=email,
+            password=temp_pw,
+            login_url=login_url
+        )
+        
+        success = await send_email(
+            recipient=email,
+            subject="Invitation to AI Candidate Screener Interview",
+            html_content=html
+        )
+        
+        if success:
+            await update_candidate_mail_sent(user_id, True)
+
+@app.post("/api/candidates/send-email")
+async def send_emails(
+    req: SendCandidateEmailRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_recruiter)
+):
+    """Send login credentials to candidates in bulk (recruiter only)."""
+    candidates = await get_candidates_for_recruiter(current_user.id)
+    
+    candidates_to_email = []
+    for c in candidates:
+        # Check if we should filter by specific user ids
+        if req.user_ids is not None and c.id not in req.user_ids:
+            continue
+        # Skip if mail already sent and user_ids is None (bulk unsent mode)
+        if req.user_ids is None and c.mail_sent:
+            continue
+        # Skip if there's no temporary password (already changed or missing)
+        if not c.temp_password:
+            continue
+            
+        candidates_to_email.append({
+            "id": c.id,
+            "email": c.email,
+            "full_name": c.full_name,
+            "temp_password": c.temp_password
+        })
+        
+    if not candidates_to_email:
+        return {"status": "no_emails_to_send"}
+        
+    base_url = str(request.base_url)
+    background_tasks.add_task(send_bulk_invitations_task, candidates_to_email, base_url)
+    
+    return {"status": "queued", "count": len(candidates_to_email)}
 
 
 # --- Serve Frontend Static Files (must be LAST) ---
