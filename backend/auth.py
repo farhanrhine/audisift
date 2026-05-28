@@ -26,16 +26,19 @@ except ImportError:
 class UserRead(schemas.BaseUser[str]):
     """User schema for reading."""
     full_name: str
+    company_name: Optional[str] = None
 
 
 class UserCreate(schemas.BaseUserCreate):
     """User schema for creation."""
     full_name: str
+    company_name: Optional[str] = None
 
 
 class UserUpdate(schemas.BaseUserUpdate):
     """User schema for update."""
     full_name: Optional[str] = None
+    company_name: Optional[str] = None
 
 
 async def get_user_db(session: AsyncSession = Depends(lambda: AsyncSessionLocal())):
@@ -83,3 +86,4 @@ fastapi_users = FastAPIUsers(
 # Dependency for protected routes
 current_active_user = fastapi_users.current_user(active=True)
 current_superuser = fastapi_users.current_user(active=True, superuser=True)
+current_active_user_optional = fastapi_users.current_user(active=True, optional=True)

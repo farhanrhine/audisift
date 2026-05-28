@@ -404,7 +404,8 @@ async function loadSessions() {
             <div class="cand-avatar">${initials}</div>
             <div>
               <div class="cand-name">${escapeHtml(s.candidate_name)}</div>
-              <div class="cand-date">${dateStr}</div>
+              ${s.candidate_email ? `<div class="cand-email" style="font-size:0.78rem; color:var(--ink-muted); margin-top:2px;">${escapeHtml(s.candidate_email)}</div>` : ''}
+              <div class="cand-date" style="font-size:0.75rem; color:var(--ink-muted); margin-top:2px;">${dateStr}</div>
             </div>
           </div>
         </td>

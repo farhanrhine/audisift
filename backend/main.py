@@ -50,6 +50,7 @@ try:
         UserRead,
         UserCreate,
         UserUpdate,
+        current_active_user_optional,
     )
     from backend.models import User
     from backend.config import SENTRY_DSN
@@ -84,6 +85,7 @@ except ImportError:
         UserRead,
         UserCreate,
         UserUpdate,
+        current_active_user_optional,
     )
     from models import User
     from config import SENTRY_DSN
@@ -165,6 +167,8 @@ app.include_router(
 # --- Request / Response Models ---
 class StartSessionRequest(BaseModel):
     candidate_name: str
+    candidate_email: str | None = None
+    token: str | None = None
 
 
 class MessageRequest(BaseModel):
@@ -241,12 +245,35 @@ async def health():
 # ============================================
 
 @app.post("/api/session/start")
-async def start_session(req: StartSessionRequest):
+async def start_session(
+    req: StartSessionRequest,
+    current_user: User | None = Depends(current_active_user_optional)
+):
     """Start a new interview session (public endpoint)."""
     if not req.candidate_name.strip():
         raise HTTPException(status_code=400, detail="Candidate name is required.")
 
-    session_id = await create_session(req.candidate_name.strip())
+    email = req.candidate_email.strip() if req.candidate_email else None
+    
+    # Resolve recruiter owner
+    owner_id = None
+    if current_user:
+        owner_id = current_user.id
+    elif req.token:
+        bulk_link = await get_bulk_link(req.token)
+        if bulk_link and not bulk_link.used_at:
+            owner_id = bulk_link.created_by_id
+
+    session_id = await create_session(
+        candidate_name=req.candidate_name.strip(),
+        candidate_email=email,
+        owner_id=owner_id
+    )
+    
+    # Mark bulk link as used if applicable
+    if req.token and owner_id:
+        await use_bulk_link(req.token, session_id)
+
     engine = create_engine(session_id, req.candidate_name.strip())
 
     opening_message = await engine.get_opening_message()
@@ -394,7 +421,9 @@ async def get_report(session_id: str):
     if not assessment:
         return {"status": "generating"}
 
-    return {"status": "ready", "report": json.loads(assessment.report_json)}
+    report_data = json.loads(assessment.report_json)
+    report_data["candidate_email"] = session.candidate_email
+    return {"status": "ready", "report": report_data}
 
 
 @app.get("/api/session/history/{session_id}")
@@ -424,7 +453,8 @@ async def get_history(session_id: str):
 @app.get("/api/dashboard")
 async def dashboard(current_user: User = Depends(current_active_user)):
     """Get dashboard stats and sessions list (recruiter only)."""
-    sessions_list = await get_all_sessions()
+    owner_id = None if current_user.is_superuser else current_user.id
+    sessions_list = await get_all_sessions(owner_id=owner_id)
     total = len(sessions_list)
     completed = [s for s in sessions_list if s.status == "completed" and s.overall_score is not None]
     avg_score = round(sum(s.overall_score for s in completed) / len(completed), 1) if completed else 0
@@ -457,7 +487,8 @@ async def dashboard(current_user: User = Depends(current_active_user)):
 @app.get("/api/stats")
 async def get_stats(current_user: User = Depends(current_active_user)):
     """Get comprehensive dashboard statistics (recruiter only)."""
-    sessions_list = await get_all_sessions(limit=10000)
+    owner_id = None if current_user.is_superuser else current_user.id
+    sessions_list = await get_all_sessions(owner_id=owner_id, limit=10000)
     
     completed = [s for s in sessions_list if s.status == "completed" and s.overall_score is not None]
     in_progress = [s for s in sessions_list if s.status == "in_progress"]
@@ -529,7 +560,8 @@ async def list_sessions(
     - limit: Results per page (max 500)
     - offset: Pagination offset
     """
-    sessions_list = await get_all_sessions(status=status, limit=10000)
+    owner_id = None if current_user.is_superuser else current_user.id
+    sessions_list = await get_all_sessions(owner_id=owner_id, status=status, limit=10000)
     
     # Apply filters
     filtered = sessions_list
@@ -542,7 +574,8 @@ async def list_sessions(
     
     # Recommendation filtering
     if recommendation:
-        filtered = [s for s in filtered if s.recommendation == recommendation]
+        rec_lower = recommendation.lower().strip()
+        filtered = [s for s in filtered if s.recommendation and s.recommendation.lower().strip() == rec_lower]
     
     # Search by name or email
     if search:
@@ -588,11 +621,13 @@ async def export_sessions_csv(
     Export sessions as CSV file (recruiter only).
     Supports optional filtering by status and recommendation.
     """
-    sessions_list = await get_all_sessions(status=status, limit=10000)
+    owner_id = None if current_user.is_superuser else current_user.id
+    sessions_list = await get_all_sessions(owner_id=owner_id, status=status, limit=10000)
     
     # Filter by recommendation if provided
     if recommendation:
-        sessions_list = [s for s in sessions_list if s.recommendation == recommendation]
+        rec_lower = recommendation.lower().strip()
+        sessions_list = [s for s in sessions_list if s.recommendation and s.recommendation.lower().strip() == rec_lower]
     
     # Build CSV in memory
     output = io.StringIO()

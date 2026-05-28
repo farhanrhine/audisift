@@ -256,6 +256,7 @@
       <div class="report-header animate-fadeIn">
         <div class="report-date" id="report-date">—</div>
         <div class="report-name" id="report-name">—</div>
+        <div id="report-email" style="font-size:1.05rem; color:var(--ink-soft); margin-top:8px; font-weight:500; display:none;">—</div>
         <div class="report-title">Candidate Assessment Report</div>
       </div>
 
@@ -380,6 +381,12 @@ async function renderReport(report, sessionId) {
 
   // Header
   document.getElementById('report-name').textContent = report.candidate_name;
+  if (report.candidate_email) {
+    document.getElementById('report-email').textContent = report.candidate_email;
+    document.getElementById('report-email').style.display = 'block';
+  } else {
+    document.getElementById('report-email').style.display = 'none';
+  }
   document.getElementById('report-date').textContent = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });

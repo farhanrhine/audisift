@@ -187,19 +187,11 @@ async def test_assessment_generation():
 @pytest.mark.asyncio
 async def test_fastapi_endpoints_and_auth():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        # 1. Verify candidate (public) start session
-        res = await client.post("/api/session/start", json={"candidate_name": "Dave Test"})
-        assert res.status_code == 200
-        data = res.json()
-        assert "session_id" in data
-        assert "opening_message" in data
-        session_id = data["session_id"]
-        
-        # 2. Try to access protected dashboard without authentication
+        # 1. Try to access protected dashboard without authentication
         res = await client.get("/api/dashboard")
         assert res.status_code == 401
         
-        # 3. Register a recruiter account
+        # 2. Register a recruiter account
         reg_payload = {
             "email": "recruiter@example.com",
             "password": "SecurePassword123!",
@@ -208,7 +200,7 @@ async def test_fastapi_endpoints_and_auth():
         res = await client.post("/auth/register", json=reg_payload)
         assert res.status_code == 201
         
-        # 4. Login as recruiter to get Bearer token (Bearer transport returns 200 on success)
+        # 3. Login as recruiter to get Bearer token
         login_payload = {
             "username": "recruiter@example.com",
             "password": "SecurePassword123!"
@@ -219,6 +211,14 @@ async def test_fastapi_endpoints_and_auth():
         assert "access_token" in token_data
         token = token_data["access_token"]
         auth_headers = {"Authorization": f"Bearer {token}"}
+        
+        # 4. Start candidate session with recruiter headers (simulating a candidate starting an interview under this recruiter)
+        res = await client.post("/api/session/start", json={"candidate_name": "Dave Test"}, headers=auth_headers)
+        assert res.status_code == 200
+        data = res.json()
+        assert "session_id" in data
+        assert "opening_message" in data
+        session_id = data["session_id"]
         
         # 5. Access dashboard with the auth headers
         res = await client.get("/api/dashboard", headers=auth_headers)

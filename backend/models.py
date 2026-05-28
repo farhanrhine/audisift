@@ -22,6 +22,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     organization_id = Column(String(36), ForeignKey("organization.id"), nullable=True)
+    company_name = Column(String(255), nullable=True)
 
     # Relationships
     organization = relationship("Organization", back_populates="users")

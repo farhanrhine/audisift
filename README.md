@@ -16,7 +16,7 @@
 
 ## What It Does
 
-A candidate visits the interview page, enters their name, and has a **5–7 minute voice conversation** with **Sarah**, an intelligent AI interviewer. Sarah listens, adapts her questions based on what the candidate says, and produces a detailed assessment report at the end.
+A candidate visits the interview page, enters their name, and has a **10-minute voice conversation** with **Sarah**, an intelligent AI interviewer. Sarah listens, adapts her questions based on what the candidate says, and produces a detailed assessment report at the end.
 
 - 🎙️ **Voice-first** — speak naturally; Whisper transcribes accurately
 - 🧠 **Fully adaptive** — no scripted question list; LLM decides what to ask next based on the conversation

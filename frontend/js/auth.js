@@ -16,6 +16,7 @@ async function register(data) {
             email: data.email,
             password: data.password,
             full_name: data.fullName,
+            company_name: data.companyName,
         }),
     });
     

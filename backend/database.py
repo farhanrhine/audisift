@@ -41,6 +41,12 @@ async def init_db():
         sync_db_url = DATABASE_URL.replace("sqlite+aiosqlite", "sqlite")
         sync_engine = create_engine(sync_db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(sync_engine)
+        # Dynamically add company_name column if it doesn't exist
+        try:
+            with sync_engine.connect() as conn:
+                conn.execute("ALTER TABLE user ADD COLUMN company_name VARCHAR(255)")
+        except Exception:
+            pass  # Already exists or table not ready
         sync_engine.dispose()
     else:
         # For PostgreSQL, use async
@@ -57,13 +63,14 @@ async def get_session_obj() -> AsyncSession:
 # --------- Session Management ---------
 
 
-async def create_session(candidate_name: str, candidate_email: str = None, organization_id: str = None) -> str:
+async def create_session(candidate_name: str, candidate_email: str = None, organization_id: str = None, owner_id: str = None) -> str:
     """Create a new interview session."""
     async with AsyncSessionLocal() as db:
         session = Session(
             candidate_name=candidate_name,
             candidate_email=candidate_email,
             organization_id=organization_id,
+            owner_id=owner_id,
             status="in_progress",
         )
         db.add(session)
@@ -78,12 +85,14 @@ async def get_session(session_id: str) -> Session | None:
         return result.scalar_one_or_none()
 
 
-async def get_all_sessions(organization_id: str = None, status: str = None, limit: int = 100, offset: int = 0) -> list[Session]:
+async def get_all_sessions(organization_id: str = None, owner_id: str = None, status: str = None, limit: int = 100, offset: int = 0) -> list[Session]:
     """Get sessions with optional filters."""
     async with AsyncSessionLocal() as db:
         query = select(Session)
         if organization_id:
             query = query.where(Session.organization_id == organization_id)
+        if owner_id:
+            query = query.where(Session.owner_id == owner_id)
         if status:
             query = query.where(Session.status == status)
         query = query.order_by(Session.created_at.desc()).limit(limit).offset(offset)

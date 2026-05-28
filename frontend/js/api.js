@@ -1,11 +1,20 @@
 export const BACKEND_URL = '';
 export const API = (path) => `${BACKEND_URL}/api${path}`;
 
-export async function fetchStartSession(name) {
+export async function fetchStartSession(name, email, token) {
+  const authToken = localStorage.getItem('access_token');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+  };
   const res = await fetch(API('/session/start'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ candidate_name: name }),
+    headers: headers,
+    body: JSON.stringify({
+      candidate_name: name,
+      candidate_email: email || null,
+      token: token || null
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();

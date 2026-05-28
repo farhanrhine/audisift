@@ -136,6 +136,12 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label" for="companyName">Company Name</label>
+          <input class="form-input" type="text" id="companyName" name="companyName"
+            placeholder="Your Company" required />
+        </div>
+
+        <div class="form-group">
           <label class="form-label" for="email">Email</label>
           <input class="form-input" type="email" id="email" name="email"
             placeholder="you@company.com" required autocomplete="email" />
@@ -209,6 +215,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
   e.preventDefault();
 
   const fullName = document.getElementById('fullName').value.trim();
+  const companyName = document.getElementById('companyName').value.trim();
   const email    = document.getElementById('email').value.trim();
   const password = passwordInput.value;
   const confirm  = confirmPasswordInput.value;
@@ -234,7 +241,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
   btnContent.innerHTML = '<div class="spinner"></div> Creating account…';
 
   try {
-    await register({ fullName, email, password });
+    await register({ fullName, companyName, email, password });
     window.location.href = 'login.html?registered=1';
   } catch (err) {
     errorMsg.textContent = err.message || 'Registration failed. Please try again.';

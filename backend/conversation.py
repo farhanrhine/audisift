@@ -19,7 +19,8 @@ try:
         DONT_KNOW_PROMPT,
         WRAP_UP_PROMPT,
     )
-    from backend.database import update_session_state
+    from backend.database import update_session_state, get_session, AsyncSessionLocal
+    from backend.models import User
 except ImportError:
     from config import GROQ_API_KEY, CONVERSATION_MODEL
     from prompts import (
@@ -32,7 +33,8 @@ except ImportError:
         DONT_KNOW_PROMPT,
         WRAP_UP_PROMPT,
     )
-    from database import update_session_state
+    from database import update_session_state, get_session, AsyncSessionLocal
+    from models import User
 
 client = AsyncGroq(api_key=GROQ_API_KEY)
 
@@ -301,7 +303,19 @@ class InterviewEngine:
     async def get_opening_message(self) -> str:
         """Get Sarah's opening message."""
         await self._ensure_initialized()
-        prompt = OPENING_PROMPT.format(candidate_name=self.candidate_name)
+        
+        # Get owner's company name
+        company_name = "our organization"
+        session = await get_session(self.session_id)
+        if session and session.owner_id:
+            from sqlalchemy import select
+            async with AsyncSessionLocal() as db:
+                user_res = await db.execute(select(User).where(User.id == session.owner_id))
+                user = user_res.scalar_one_or_none()
+                if user and user.company_name:
+                    company_name = user.company_name
+
+        prompt = OPENING_PROMPT.format(candidate_name=self.candidate_name, company_name=company_name)
         response = await _call_simple(prompt)
         self.state["messages"].append({"role": "assistant", "content": response})
         self.state["last_sarah_message"] = response
@@ -397,7 +411,7 @@ class InterviewEngine:
                     # Move to next
                     await self._mark_dimension_progress()
                     if (
-                        self.state["exchange_count"] >= 7
+                        self.state["exchange_count"] >= 8
                         or not self.state["dimensions_uncovered"]
                     ):
                         self.state["interview_complete"] = True
@@ -461,7 +475,7 @@ class InterviewEngine:
     async def _graceful_move_on(self):
         """Move to next dimension after 'I don't know'."""
         if (
-            self.state["exchange_count"] >= 7
+            self.state["exchange_count"] >= 8
             or not self.state["dimensions_uncovered"]
         ):
             self.state["interview_complete"] = True

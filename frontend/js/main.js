@@ -15,9 +15,13 @@ let silenceTimer = null;
 let accumulatedTranscript = '';
 const MIC_MAX_SECONDS = 60;
 const INTERVIEW_TOTAL_SECONDS = 600; // 10-minute interview
+let interviewToken = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  interviewToken = urlParams.get('token');
+
   const isSupported = /Chrome|Chromium|Edg/.test(navigator.userAgent);
   if (!isSupported) {
     const warn = document.getElementById('chrome-warning');
@@ -27,6 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const nameInput = document.getElementById('candidate-name');
   if (nameInput) {
     nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') startInterview();
+    });
+  }
+
+  const emailInput = document.getElementById('candidate-email');
+  if (emailInput) {
+    emailInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') startInterview();
     });
   }
@@ -60,11 +71,25 @@ function setProcessing(val) {
 
 async function startInterview() {
   const nameInput = document.getElementById('candidate-name');
+  const emailInput = document.getElementById('candidate-email');
+  
   const name = nameInput.value.trim();
+  const email = emailInput ? emailInput.value.trim() : '';
+
   if (!name) {
     nameInput.focus();
     nameInput.style.borderColor = 'var(--accent)';
     setTimeout(() => nameInput.style.borderColor = '', 1500);
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    if (emailInput) {
+      emailInput.focus();
+      emailInput.style.borderColor = 'var(--accent)';
+      setTimeout(() => emailInput.style.borderColor = '', 1500);
+    }
     return;
   }
 
@@ -73,7 +98,7 @@ async function startInterview() {
   btn.textContent = 'Starting…';
 
   try {
-    const data = await API.fetchStartSession(name);
+    const data = await API.fetchStartSession(name, email, interviewToken);
     sessionId = data.session_id;
 
     document.getElementById('welcome-screen').style.display = 'none';

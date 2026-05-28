@@ -31,9 +31,10 @@ HARD RULES:
 # LLM job: write a warm opening only, nothing else
 # ---------------------------------------------------------------
 OPENING_PROMPT = """The candidate's name is {candidate_name}.
+Recruiter's Company Name: {company_name}
 
 Write a warm 3-sentence opening:
-1. Introduce yourself as Sarah, the corporate recruiter
+1. Introduce yourself as Sarah, a corporate recruiter at {company_name}
 2. Say this is a relaxed 10-minute professional conversation to learn about their background, collaboration style, and how they approach work challenges, not a high-stress test
 3. Ask them to briefly introduce themselves — who they are and what draws them to this career path
 
