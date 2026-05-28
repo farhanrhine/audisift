@@ -7,10 +7,10 @@ from sqlalchemy import create_engine, select, update
 from sqlalchemy.pool import NullPool, StaticPool
 
 try:
-    from backend.models import Base, Session, Message, Assessment, Organization, User, SessionNote, BulkLink
+    from backend.models import Base, Session, Message, Assessment, Organization, User, SessionNote, BulkLink, IssueReport
     from backend.config import DATABASE_URL
 except ImportError:
-    from models import Base, Session, Message, Assessment, Organization, User, SessionNote, BulkLink
+    from models import Base, Session, Message, Assessment, Organization, User, SessionNote, BulkLink, IssueReport
     from config import DATABASE_URL
 
 
@@ -388,3 +388,74 @@ async def update_candidate_mail_sent(user_id: str, mail_sent: bool):
             .values(mail_sent=mail_sent)
         )
         await db.commit()
+
+
+# --------- Issue Reports & Feedback ---------
+
+async def create_issue_report(reporter_name: str = None, reporter_email: str = None, role: str = "candidate", description: str = "") -> IssueReport:
+    """Create a new issue/feedback report."""
+    async with AsyncSessionLocal() as db:
+        report = IssueReport(
+            reporter_name=reporter_name,
+            reporter_email=reporter_email,
+            role=role,
+            description=description,
+            status="open"
+        )
+        db.add(report)
+        await db.commit()
+        return report
+
+
+async def get_all_issue_reports() -> list[IssueReport]:
+    """Get all issue reports, newest first."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(IssueReport).order_by(IssueReport.created_at.desc())
+        )
+        return result.scalars().all()
+
+
+async def update_issue_status(issue_id: int, status: str):
+    """Update status of a reported issue."""
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(IssueReport)
+            .where(IssueReport.id == issue_id)
+            .values(status=status)
+        )
+        await db.commit()
+
+
+async def get_recruiters_usage_stats() -> list[dict]:
+    """Get statistics for all recruiters (company, candidate count, interview count)."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(User).where(User.role == "recruiter").order_by(User.created_at.desc())
+        )
+        recruiters = result.scalars().all()
+        
+        stats = []
+        for r in recruiters:
+            # Count candidates created by this recruiter
+            cand_res = await db.execute(
+                select(User).where(User.created_by_id == r.id, User.role == "candidate")
+            )
+            candidates_count = len(cand_res.scalars().all())
+            
+            # Count interview sessions owned by this recruiter
+            sess_res = await db.execute(
+                select(Session).where(Session.owner_id == r.id)
+            )
+            sessions_count = len(sess_res.scalars().all())
+            
+            stats.append({
+                "id": r.id,
+                "email": r.email,
+                "full_name": r.full_name,
+                "company_name": r.company_name,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "candidate_count": candidates_count,
+                "session_count": sessions_count
+            })
+        return stats

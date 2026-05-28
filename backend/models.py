@@ -136,3 +136,16 @@ class BulkLink(Base):
     # Relationships
     created_by = relationship("User")
     session = relationship("Session")
+
+
+class IssueReport(Base):
+    """Bug reports, questions, and feedback submitted by users."""
+    __tablename__ = "issue_report"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    reporter_name = Column(String(255), nullable=True)
+    reporter_email = Column(String(255), nullable=True)
+    role = Column(String(50), nullable=False)  # "candidate" or "recruiter"
+    description = Column(Text, nullable=False)
+    status = Column(String(50), default="open", index=True)  # open, in_progress, resolved
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

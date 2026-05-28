@@ -39,6 +39,10 @@ try:
         get_bulk_links_for_user,
         get_candidates_for_recruiter,
         update_candidate_mail_sent,
+        create_issue_report,
+        get_all_issue_reports,
+        update_issue_status,
+        get_recruiters_usage_stats,
     )
     from backend.conversation import create_engine
     from backend.assessment import generate_assessment
@@ -79,6 +83,10 @@ except ImportError:
         get_bulk_links_for_user,
         get_candidates_for_recruiter,
         update_candidate_mail_sent,
+        create_issue_report,
+        get_all_issue_reports,
+        update_issue_status,
+        get_recruiters_usage_stats,
     )
     from conversation import create_engine
     from assessment import generate_assessment
@@ -1023,6 +1031,71 @@ async def send_emails(
     background_tasks.add_task(send_bulk_invitations_task, candidates_to_email, base_url)
     
     return {"status": "queued", "count": len(candidates_to_email)}
+
+
+# ============================================
+# SYSTEM OWNER ADMIN & FEEDBACK
+# ============================================
+
+class FeedbackReportRequest(BaseModel):
+    reporter_name: str | None = None
+    reporter_email: str | None = None
+    role: str = "candidate"
+    description: str
+
+class UpdateIssueStatusRequest(BaseModel):
+    status: str
+
+@app.post("/api/feedback/report")
+async def report_issue(req: FeedbackReportRequest):
+    """Submit a feedback or issue report (public)."""
+    if not req.description.strip():
+        raise HTTPException(status_code=400, detail="Description cannot be empty.")
+    
+    report = await create_issue_report(
+        reporter_name=req.reporter_name.strip() if req.reporter_name else None,
+        reporter_email=req.reporter_email.strip() if req.reporter_email else None,
+        role=req.role.strip(),
+        description=req.description.strip()
+    )
+    return {
+        "status": "submitted",
+        "id": report.id
+    }
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(current_user: User = Depends(current_superuser)):
+    """Get recruiters usage and counts (owner only)."""
+    stats = await get_recruiters_usage_stats()
+    return {"recruiters": stats}
+
+@app.get("/api/admin/issues")
+async def get_admin_issues(current_user: User = Depends(current_superuser)):
+    """List all reported feedback/issues (owner only)."""
+    issues = await get_all_issue_reports()
+    return {
+        "issues": [
+            {
+                "id": issue.id,
+                "reporter_name": issue.reporter_name,
+                "reporter_email": issue.reporter_email,
+                "role": issue.role,
+                "description": issue.description,
+                "status": issue.status,
+                "created_at": issue.created_at.isoformat() if issue.created_at else None
+            }
+            for issue in issues
+        ]
+    }
+
+@app.post("/api/admin/issues/{issue_id}/status")
+async def change_issue_status(issue_id: int, req: UpdateIssueStatusRequest, current_user: User = Depends(current_superuser)):
+    """Update status of a feedback/issue report (owner only)."""
+    if req.status not in ["open", "in_progress", "resolved"]:
+        raise HTTPException(status_code=400, detail="Invalid status. Must be open, in_progress, or resolved.")
+    
+    await update_issue_status(issue_id, req.status)
+    return {"status": "updated"}
 
 
 # --- Serve Frontend Static Files (must be LAST) ---

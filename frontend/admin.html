@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Admin Panel — AI Candidate Screener</title>
+  <meta name="description" content="Overview of recruiter metrics, candidate registrations, and system feedback." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/theme.js"></script>
+  <script src="js/auth.js"></script>
+  <style>
+    .page { position: relative; z-index: 1; min-height: 100vh; }
+
+    /* NAV */
+    .nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.25rem 2rem; border-bottom: 1px solid var(--border);
+      background: var(--paper);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-left { display: flex; align-items: center; gap: 12px; }
+    .nav-logo-icon { width: 28px; height: 28px; color: var(--accent); }
+    .nav-logo-icon svg { width: 100%; height: 100%; stroke-width: 2px; }
+    .nav-text { font-family: var(--font-display); font-size: 1.25rem; color: var(--ink); line-height: 1; margin-bottom: 2px; }
+    .nav-sub  { font-size: 0.70rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .nav-user { font-size: 0.88rem; font-weight: 500; color: var(--ink-soft); }
+
+    /* MAIN */
+    main { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    /* PAGE HEADER */
+    .page-header {
+      display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 36px; flex-wrap: wrap; gap: 16px;
+    }
+    .page-header h1 { margin-bottom: 4px; }
+    .page-header p { font-size: 1rem; color: var(--ink-soft); }
+
+    /* ANALYTICS GRID */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 36px;
+    }
+    .stat-card { padding: 28px 24px; border: 1px solid var(--border); box-shadow: var(--shadow-card); background: var(--paper-card); }
+    .stat-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); margin-bottom: 8px; }
+    .stat-value { font-family: var(--font-display); font-size: 2.6rem; line-height: 1; color: var(--ink); }
+    .stat-sub   { font-size: 0.82rem; color: var(--ink-soft); margin-top: 8px; font-weight: 500; }
+
+    /* TABLES & SECTIONS */
+    .section-title {
+      font-family: var(--font-display); font-size: 1.6rem; color: var(--ink); margin-bottom: 20px;
+    }
+    .table-card { overflow: hidden; background: var(--paper-card); border: 1px solid var(--border); box-shadow: var(--shadow-card); border-radius: var(--radius-md); margin-bottom: 40px; }
+    
+    .table-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 28px; border-bottom: 1px solid var(--border);
+    }
+    .table-header h2 { font-size: 1.2rem; font-weight: 600; margin: 0; }
+    .table-count { font-size: 0.85rem; font-weight: 500; color: var(--ink-muted); }
+
+    .admin-table { width: 100%; border-collapse: collapse; }
+    .admin-table th {
+      padding: 14px 28px; text-align: left; font-size: 0.72rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);
+      border-bottom: 1px solid var(--border-soft); background: var(--paper-warm);
+    }
+    .admin-table td {
+      padding: 16px 28px; font-size: 0.95rem; color: var(--ink);
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: middle;
+    }
+    .admin-table tr:hover td { background: var(--paper-warm); }
+    .admin-table tr:last-child td { border-bottom: none; }
+
+    /* Auth loading overlay */
+    #auth-loading {
+      position: fixed; inset: 0; background: var(--paper);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .auth-spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body>
+<div id="auth-loading"><div class="auth-spinner"></div></div>
+<div class="page" id="main-page" style="display:none">
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-left">
+      <div class="nav-logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" class="icon"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5M12 19v3M8 22h8"/></svg>
+      </div>
+      <div>
+        <div class="nav-text">AI Screener</div>
+        <div class="nav-sub">System Owner Admin</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <span class="nav-user" id="nav-user-name"></span>
+      <a href="dashboard.html" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; font-weight:600; text-decoration:none;">Dashboard</a>
+      <a href="candidates.html" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; font-weight:600; text-decoration:none;">Candidates</a>
+      <a href="admin.html" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; font-weight:600; text-decoration:none; border-bottom: 2px solid var(--accent); border-radius: 0;">Admin Panel</a>
+      <button onclick="logout()" class="btn btn-ghost" style="padding:10px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px;" title="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </button>
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Theme">
+        <svg viewBox="0 0 24 24" fill="none" class="icon theme-toggle-icon"></svg>
+      </button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Page Header -->
+    <div class="page-header animate-fadeIn">
+      <div>
+        <h1 class="font-display">System Overview</h1>
+        <p>Global analytics, recruiter client tracking, and bug/feedback resolution</p>
+      </div>
+    </div>
+
+    <!-- Analytics Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="card stat-card animate-fadeIn">
+        <div class="stat-label">Total Recruiter Clients</div>
+        <div class="stat-value" id="stat-recruiters">—</div>
+        <div class="stat-sub">SaaS Registrations</div>
+      </div>
+      <div class="card stat-card animate-fadeIn" style="animation-delay:0.1s">
+        <div class="stat-label">Total Candidate Users</div>
+        <div class="stat-value" id="stat-candidates">—</div>
+        <div class="stat-sub">Generated Accounts</div>
+      </div>
+      <div class="card stat-card animate-fadeIn" style="animation-delay:0.2s">
+        <div class="stat-label">Total Conducted Interviews</div>
+        <div class="stat-value" id="stat-sessions">—</div>
+        <div class="stat-sub">Conversational Sessions</div>
+      </div>
+    </div>
+
+    <!-- Recruiter Metrics Section -->
+    <div class="section-title animate-fadeIn" style="animation-delay: 0.3s;">Registered Recruiters &amp; Usage</div>
+    <div class="card table-card animate-fadeIn" style="animation-delay:0.3s">
+      <div class="table-header">
+        <h2>Recruiter Accounts</h2>
+        <span id="recruiter-count" class="table-count">0 registered</span>
+      </div>
+      <div id="recruiter-table-body">
+        <div style="padding:40px; text-align:center;"><div class="auth-spinner" style="margin:auto; width:30px; height:30px;"></div></div>
+      </div>
+    </div>
+
+    <!-- Feedback/Issues Section -->
+    <div class="section-title animate-fadeIn" style="animation-delay: 0.4s;">Submitted Issues &amp; Feedback</div>
+    <div class="card table-card animate-fadeIn" style="animation-delay:0.4s">
+      <div class="table-header">
+        <h2>Bugs &amp; Feature Feedback</h2>
+        <span id="issues-count" class="table-count">0 reports</span>
+      </div>
+      <div id="issues-table-body">
+        <div style="padding:40px; text-align:center;"><div class="auth-spinner" style="margin:auto; width:30px; height:30px;"></div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let currentUser = null;
+
+async function initAdmin() {
+  try {
+    currentUser = await checkAuth();
+    if (!currentUser.is_superuser) {
+      // Access Denied for standard recruiters and candidates
+      document.body.innerHTML = `
+        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--paper); font-family: var(--font-body); padding: 20px;">
+          <div style="max-width: 400px; text-align: center;">
+            <h1 class="font-display" style="color: var(--danger); font-size: 2rem; margin-bottom: 12px;">Access Denied</h1>
+            <p style="color: var(--ink-soft); margin-bottom: 24px;">Only the system owner (superuser) is authorized to view the admin control panel.</p>
+            <a href="dashboard.html" class="btn btn-primary" style="text-decoration:none;">Go to Recruiter Dashboard</a>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    const nameEl = document.getElementById('nav-user-name');
+    if (nameEl && currentUser.full_name) {
+      nameEl.textContent = currentUser.full_name;
+    }
+    document.getElementById('auth-loading').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+
+    // Load metrics and reports
+    loadRecruiterMetrics();
+    loadIssueReports();
+  } catch (e) {
+    window.location.href = 'login.html';
+  }
+}
+
+function authFetch(url, options = {}) {
+  const token = getToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}
+
+// Load recruiter list and metrics
+async function loadRecruiterMetrics() {
+  try {
+    const res = await authFetch('/api/admin/stats');
+    if (res.status === 401 || res.status === 403) { window.location.href = 'login.html'; return; }
+    const data = await res.json();
+    const recruiters = data.recruiters || [];
+
+    // Sum overall analytics
+    const totalRecruiters = recruiters.length;
+    const totalCandidates = recruiters.reduce((sum, r) => sum + r.candidate_count, 0);
+    const totalSessions = recruiters.reduce((sum, r) => sum + r.session_count, 0);
+
+    document.getElementById('stat-recruiters').textContent = totalRecruiters;
+    document.getElementById('stat-candidates').textContent = totalCandidates;
+    document.getElementById('stat-sessions').textContent    = totalSessions;
+    document.getElementById('recruiter-count').textContent   = `${totalRecruiters} recruiter${totalRecruiters !== 1 ? 's' : ''}`;
+
+    const tableContainer = document.getElementById('recruiter-table-body');
+    if (recruiters.length === 0) {
+      tableContainer.innerHTML = `<div style="padding:40px; text-align:center; color:var(--ink-muted);">No registered recruiters found.</div>`;
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'admin-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Recruiter Name</th>
+          <th>Company</th>
+          <th>Candidate Accounts</th>
+          <th>Conducted Interviews</th>
+          <th>Date Joined</th>
+        </tr>
+      </thead>
+      <tbody></tbody>`;
+
+    const tbody = table.querySelector('tbody');
+    recruiters.forEach(r => {
+      const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:600; color:var(--ink);">${escapeHtml(r.full_name)}</div>
+          <div style="font-size:0.8rem; color:var(--ink-muted); margin-top:2px;">${escapeHtml(r.email)}</div>
+        </td>
+        <td><span class="pw-badge" style="font-family:inherit; font-size:inherit; font-weight:500;">${escapeHtml(r.company_name || '—')}</span></td>
+        <td><strong style="color:var(--ink); font-size:1.05rem;">${r.candidate_count}</strong></td>
+        <td><strong style="color:var(--ink); font-size:1.05rem;">${r.session_count}</strong></td>
+        <td style="font-size:0.88rem; color:var(--ink-muted);">${dateStr}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tableContainer.innerHTML = '';
+    tableContainer.appendChild(table);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('recruiter-table-body').innerHTML = `<p style="padding:20px; color:var(--danger);">Failed to load recruiter usage statistics.</p>`;
+  }
+}
+
+// Load issue reports/feedback
+async function loadIssueReports() {
+  try {
+    const res = await authFetch('/api/admin/issues');
+    if (!res.ok) throw new Error('Failed to load issues');
+    const data = await res.json();
+    const issues = data.issues || [];
+
+    document.getElementById('issues-count').textContent = `${issues.length} report${issues.length !== 1 ? 's' : ''}`;
+
+    const tableContainer = document.getElementById('issues-table-body');
+    if (issues.length === 0) {
+      tableContainer.innerHTML = `<div style="padding:40px; text-align:center; color:var(--ink-muted);">No issue reports or feedback submitted yet.</div>`;
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'admin-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Reporter</th>
+          <th>Role</th>
+          <th>Description &amp; Feedback</th>
+          <th>Status</th>
+          <th style="text-align:right">Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>`;
+
+    const tbody = table.querySelector('tbody');
+    issues.forEach(i => {
+      const dateStr = i.created_at ? new Date(i.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+      const tr = document.createElement('tr');
+      
+      const roleBadge = i.role === 'recruiter' 
+        ? `<span class="badge badge-purple">Recruiter</span>`
+        : `<span class="badge badge-grey">Candidate</span>`;
+      
+      const statusBadge = i.status === 'resolved'
+        ? `<span class="badge badge-green">✓ Resolved</span>`
+        : i.status === 'in_progress'
+        ? `<span class="badge badge-amber">⚠ In Progress</span>`
+        : `<span class="badge badge-amber" style="background:rgba(229, 43, 80, 0.1); color:var(--accent); border-color:rgba(229, 43, 80, 0.2);">● Open</span>`;
+
+      const actions = i.status === 'resolved'
+        ? `<span style="font-size:0.85rem; color:var(--ink-muted); font-weight:600;">Resolved</span>`
+        : `
+          <div style="display:flex; justify-content:flex-end; gap:8px;">
+            ${i.status === 'open' ? `<button onclick="updateIssue('${i.id}', 'in_progress')" class="btn btn-ghost" style="padding:4px 8px; font-size:0.75rem;">Set Progress</button>` : ''}
+            <button onclick="updateIssue('${i.id}', 'resolved')" class="btn btn-primary" style="padding:4px 8px; font-size:0.75rem; background:var(--accent-green);">Resolve</button>
+          </div>
+        `;
+
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:600; color:var(--ink);">${escapeHtml(i.reporter_name || 'Anonymous')}</div>
+          <div style="font-size:0.78rem; color:var(--ink-muted); margin-top:2px;">${escapeHtml(i.reporter_email || '—')}</div>
+          <div style="font-size:0.72rem; color:var(--ink-faint); margin-top:2px;">${dateStr}</div>
+        </td>
+        <td>${roleBadge}</td>
+        <td style="max-width:320px; font-size:0.9rem; line-height:1.5; color:var(--ink-soft); word-break:break-word;">${escapeHtml(i.description)}</td>
+        <td>${statusBadge}</td>
+        <td style="text-align:right">${actions}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tableContainer.innerHTML = '';
+    tableContainer.appendChild(table);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('issues-table-body').innerHTML = `<p style="padding:20px; color:var(--danger);">Failed to load reported feedback.</p>`;
+  }
+}
+
+// Update issue status
+async function updateIssue(id, status) {
+  try {
+    const res = await authFetch(`/api/admin/issues/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status })
+    });
+    if (!res.ok) throw new Error('Status update failed');
+    loadIssueReports();
+  } catch (err) {
+    alert('Failed to update issue status: ' + err.message);
+  }
+}
+
+function escapeHtml(text) {
+  return (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Boot
+initAdmin();
+</script>
+<script src="js/feedback.js"></script>
+</body>
+</html>

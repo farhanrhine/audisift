@@ -114,12 +114,24 @@ graph TD
 - **Recruiter Dashboard:** `/api/interviews/bulk-links` shows all generated links with stats
 - **HTML Templates:** Professional styled emails with call-to-action buttons
 
-### 🔐 Authentication & Admin Dashboard
-- **JWT Authentication:** 24-hour token expiry, secure recruiter login
-- **Role-Based Access:** Separate recruiter and admin permissions
-- **Session Management:** Track all interviews, filter by score, date, status
-- **CSV Export:** Bulk download of interview data for analysis
-- **Private Notes:** Recruiters can annotate sessions with decision context
+### 👑 System Owner Admin Panel & Feedback System
+- **System Owner Panel (`admin.html`):** Beautiful centralized control panel restricted exclusively to superuser accounts (`is_superuser = True`).
+- **Recruiter Usage Analytics:** Tracks recruiter details, company names, number of candidate accounts created, and total interview sessions run.
+- **Centralized Issue Resolution Board:** Lists all bugs and feedback submitted by recruiters and candidates, allowing the system owner to manage them (Open, In Progress, Resolved).
+- **Modular Floating Feedback Widget (`js/feedback.js`):** A premium floating action button (FAB) injected globally that opens a modal pre-filled with the active user's details to submit feedback asynchronously.
+
+### 🔐 Dual-Role Authentication & Access Control (RBAC)
+- **Recruiter Role**: Log in securely to the corporate dashboard to manage candidates, view assessment reports, add private decision notes, and export session data to CSV.
+- **Candidate Role**: Log in with generated credentials to take the adaptive voice interview. Candidates are strictly sandboxed and cannot access reports, statistics, or administrative views.
+- **System Owner (Superuser) Role**: Exclusive access to the Owner Admin Panel (`admin.html`) to oversee recruiter statistics and manage reported issues.
+- **JWT Security**: 24-hour JWT token expiration with secure cookies/headers checking.
+
+### 👥 Candidate Management & Bulk Invites
+- **Text Entry Batching**: Generate up to 1,000 candidate accounts in a single click by entering a list of `email, name` pairs.
+- **CSV Drag-and-Drop**: Load candidate details instantly by dragging and dropping a CSV file with automatic header parsing (`email`, `fullname`).
+- **Automatic Credentials Generator**: The system automatically generates unique, readable 8-character passwords for each new candidate account.
+- **One-Click Bulk Emails**: Send customized email invites containing candidate credentials in the background with a single click, or resend individual invites.
+- **Company Customization**: Custom company names are captured during recruiter registration and personalized across emails and dashboards.
 
 ### 🎯 Intelligent Assessment Engine
 - **5-Dimension Scoring:** Communication, Warmth, Simplification, Fluency, Fit
@@ -328,6 +340,7 @@ The frontend is intentionally built using **Pure Vanilla JS** and **Vanilla CSS*
 | `/ws/transcribe/{session_id}` | WebSocket | Real-time binary audio streaming with interim/final transcriptions |
 | `/api/session/report/{session_id}` | GET | Poll for assessment report (returns `{status: "generating"|"ready", report: {...}}`) |
 | `/api/session/history/{session_id}` | GET | Get interview transcript |
+| `/api/feedback/report` | POST | Submit feedback/bug report |
 
 ### Protected Endpoints (Recruiter/Admin Auth Required)
 
@@ -342,6 +355,14 @@ The frontend is intentionally built using **Pure Vanilla JS** and **Vanilla CSS*
 | `/api/interviews/bulk-generate` | POST | Generate 1-1000 unique interview tokens in batch |
 | `/api/interviews/bulk-links` | GET | List all generated bulk links with usage stats |
 | `/api/health` | GET | System health (DB connectivity, timestamp) |
+
+### Superuser Protected Endpoints (System Owner Only)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/admin/stats` | GET | Overview of all recruiters and their candidate/session usage metrics |
+| `/api/admin/issues` | GET | List all submitted feedback and issue reports |
+| `/api/admin/issues/{id}/status` | POST | Update status of a feedback report (open, in_progress, resolved) |
 
 ---
 
