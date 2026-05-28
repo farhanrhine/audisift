@@ -41,7 +41,7 @@ try:
     from backend.conversation import create_engine
     from backend.assessment import generate_assessment
     from backend.transcription import AudioBuffer
-    from backend.email import send_email, assessment_complete_email, bulk_links_email
+    from backend.email_utils import send_email, assessment_complete_email, bulk_links_email
     from backend.auth import (
         fastapi_users, 
         current_active_user, 
@@ -75,7 +75,7 @@ except ImportError:
     )
     from conversation import create_engine
     from assessment import generate_assessment
-    from email import send_email, assessment_complete_email, bulk_links_email
+    from email_utils import send_email, assessment_complete_email, bulk_links_email
     from auth import (
         fastapi_users, 
         current_active_user, 
