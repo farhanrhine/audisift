@@ -241,6 +241,159 @@ uv run uvicorn main:app --reload
 
 Open **http://localhost:8000** in Chrome or Edge.
 
+---
+
+## Testing Credentials & Login Systems
+
+The system supports **4 distinct authentication routes** for different user types. Use these test credentials after starting the server:
+
+### 1️⃣ **Recruiter Login** — Email + Password (Dashboard Access)
+**URL:** http://localhost:8000/login.html
+
+| Field | Value |
+|-------|-------|
+| **Email** | `recruiter@test.com` |
+| **Password** | `TestPassword123` |
+| **Access** | Dashboard, Candidate Management, Interview Reports |
+
+**What you can do:**
+- View all conducted interviews & scores
+- Create candidate accounts (bulk or individual)
+- Export session data to CSV
+- Add private decision notes to sessions
+- View assessment reports with candidate transcripts
+
+---
+
+### 2️⃣ **Candidate Account Login** — Email + Temp Password (Interview Access)
+**URL:** http://localhost:8000/candidate_login.html
+
+| Field | Value |
+|-------|-------|
+| **Email** | `candidate@test.com` |
+| **Password** | `u3LcTbUf` |
+| **Access** | Redirects to interview page with pre-filled name/email |
+
+**What you can do:**
+- Take the 10-minute voice interview
+- View results & assessment report
+- Cannot access recruiter dashboard or candidate management
+
+**How to Create Candidate Accounts:**
+
+1. **Login as Recruiter** → Go to "Candidates" tab
+2. **Enter bulk list** (one per line, format: `email, Full Name`):
+   ```
+   alice.johnson@company.com, Alice Johnson
+   bob.smith@company.com, Bob Smith
+   charlie.brown@company.com, Charlie Brown
+   ```
+3. **Click "Generate Candidate Accounts"** → System generates random 8-char passwords
+4. **Click "Send Bulk Invites"** → Email candidates their credentials
+5. **Share "Sign In" link** → Candidates login with their email + generated password at `/candidate_login.html`
+
+**Alternatively:** Import CSV file with columns `email` and `name` using the drag-drop area on the same page.
+
+---
+
+### 3️⃣ **Public/Token-Based Login** — No Account Required (Anonymous Interview)
+**URL:** http://localhost:8000/index.html
+
+| Field | Value |
+|-------|-------|
+| **Name** | Any (e.g., "John Candidate") |
+| **Email** | Any (e.g., "john@example.com") |
+| **Auth Required** | ❌ No |
+
+**What you can do:**
+- Start interview immediately without login
+- Take full assessment & view report
+- No account creation needed
+
+**Use Case:** Direct candidate links, quick demo screening, bulk token-based interviews
+
+---
+
+### 4️⃣ **Admin/System Owner Login** — Superuser Access (System Control Panel)
+**URL:** http://localhost:8000/login.html (same as Recruiter, but with elevated privileges)
+
+| Field | Value |
+|-------|-------|
+| **Email** | `recruiter@test.com` |
+| **Password** | `TestPassword123` |
+| **Superuser** | ✅ Yes (pre-activated in database) |
+| **Access** | Admin Panel + all recruiter features |
+
+**How to Enable Admin Access:**
+
+If the recruiter account doesn't have admin access yet:
+
+```bash
+# Local Development Only
+cd backend
+uv run python -c "
+import asyncio
+from database import AsyncSessionLocal
+from models import User
+from sqlalchemy import update as sql_update
+
+async def promote():
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            sql_update(User)
+            .where(User.email == 'recruiter@test.com')
+            .values(is_superuser=True)
+        )
+        await db.commit()
+        print('✅ recruiter@test.com is now a superuser')
+
+asyncio.run(promote())
+"
+```
+
+**For Render Production:**
+Use Render's PostgreSQL database browser or connect via `psql` to run:
+```sql
+UPDATE \"user\" SET is_superuser = true WHERE email = 'youremail@example.com';
+```
+
+**After login, click "Admin Panel" in navigation**
+
+**What you can do:**
+- View system-wide statistics (total recruiters, candidates, interviews)
+- Track recruiter client usage metrics
+- Manage bug reports & feedback submissions
+- Change issue status (Open → In Progress → Resolved)
+- Monitor platform health & activity
+
+---
+
+### Quick Start Testing Flow
+
+```
+1. Start Server
+   └─ uv run uvicorn backend.main:app --reload
+
+2. Test Public Interview (No Login)
+   └─ Visit http://localhost:8000/index.html
+   └─ Enter name + email → Start interview
+
+3. Login as Recruiter
+   └─ Visit http://localhost:8000/login.html
+   └─ Email: recruiter@test.com | Password: TestPassword123
+   └─ Create new candidate account in "Candidates" tab
+
+4. Login as Candidate
+   └─ Visit http://localhost:8000/candidate_login.html
+   └─ Use credentials of newly created candidate
+   └─ Take interview → View report
+
+5. Access Admin Panel
+   └─ Logout & login as recruiter again (same credentials)
+   └─ Click "Admin Panel" in navigation
+   └─ View recruiter metrics & manage issues
+```
+
 ### 4. Running Tests
 
 The project includes a comprehensive, offline-friendly test suite checking database CRUD, LangGraph state machine routing, assessment calculations, and FastAPI REST endpoints/authentication.
@@ -431,9 +584,5 @@ Before sending to the assessment LLM, the transcript is cleaned:
 | Non-Chrome browser | Warning banner shown; text input always available as fallback |
 | Interview has no data | **Hard-Fail Guardrail** → No hallucinated reports; score set to 0.0 |
 | PDF Export in Dark Mode | High-contrast Print Media overrides ensure black text on white paper |
-
----
-
-*Built and documented with the strategic help of **Google Antigravity** and **Claude AI**.*
 
 

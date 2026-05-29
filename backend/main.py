@@ -911,8 +911,17 @@ async def bulk_generate_candidates(
             user = await user_manager.create(user_create, safe=True)
             
             # Update temporary password, created_by_id, and mail_sent in the DB
-            from backend.database import AsyncSessionLocal
-            from backend.models import User as DBUser
+            try:
+                # Handle both module import styles (backend.main and direct main)
+                from backend.database import AsyncSessionLocal
+            except ImportError:
+                from database import AsyncSessionLocal
+            
+            try:
+                from backend.models import User as DBUser
+            except ImportError:
+                from models import User as DBUser
+            
             from sqlalchemy import update as sql_update
             
             async with AsyncSessionLocal() as db:
