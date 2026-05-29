@@ -43,6 +43,7 @@ try:
         get_all_issue_reports,
         update_issue_status,
         get_recruiters_usage_stats,
+        seed_demo_data,
     )
     from backend.conversation import create_engine
     from backend.assessment import generate_assessment
@@ -87,6 +88,7 @@ except ImportError:
         get_all_issue_reports,
         update_issue_status,
         get_recruiters_usage_stats,
+        seed_demo_data,
     )
     from conversation import create_engine
     from assessment import generate_assessment
@@ -120,6 +122,7 @@ if SENTRY_DSN:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await seed_demo_data()  # Create test accounts if they don't exist
     # Start background task for session cleanup (Phase 7)
     cleanup_task = asyncio.create_task(session_cleanup_loop())
     yield

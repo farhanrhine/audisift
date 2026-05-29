@@ -98,6 +98,63 @@ async def init_db():
                 pass
 
 
+async def seed_demo_data():
+    """Create demo/test accounts on startup (idempotent)."""
+    try:
+        async with AsyncSessionLocal() as session:
+            # Check if test accounts already exist
+            stmt = select(User).where(User.email == "recruiter@test.com")
+            result = await session.execute(stmt)
+            existing_recruiter = result.scalars().first()
+            
+            if existing_recruiter:
+                # Already seeded
+                print("[Database] Demo accounts already exist, skipping seed")
+                return
+            
+            print("[Database] Creating demo accounts...")
+            
+            # Import here to avoid circular imports
+            try:
+                from backend.auth import UserManager, UserCreate, get_user_db
+            except ImportError:
+                from auth import UserManager, UserCreate, get_user_db
+            
+            from fastapi_users.db import SQLAlchemyUserDatabase
+            
+            user_db = SQLAlchemyUserDatabase(session, User)
+            user_manager = UserManager(user_db)
+            
+            # Create recruiter account
+            recruiter_create = UserCreate(
+                email="recruiter@test.com",
+                password="TestPassword123",
+                full_name="Alice Johnson",
+                company_name="Test Company",
+                role="recruiter"
+            )
+            recruiter_user = await user_manager.create(recruiter_create, safe=False)
+            print(f"[Database] Created recruiter: {recruiter_user.email}")
+            
+            # Create candidate account
+            candidate_create = UserCreate(
+                email="candidate@test.com",
+                password="u3LcTbUf",
+                full_name="Test Candidate",
+                company_name="Test Company",
+                role="candidate"
+            )
+            candidate_user = await user_manager.create(candidate_create, safe=False)
+            print(f"[Database] Created candidate: {candidate_user.email}")
+            
+            await session.commit()
+            print("[Database] Demo accounts created successfully!")
+            
+    except Exception as e:
+        print(f"[Database] Warning: Could not seed demo data: {str(e)}")
+        # Don't fail startup if seeding fails
+
+
 async def get_session_obj() -> AsyncSession:
     """Get a database session."""
     async with AsyncSessionLocal() as session:
