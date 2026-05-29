@@ -5,6 +5,46 @@
 
 **<a href="https://ai-tutor-screener-29ln.onrender.com/" target="_blank">🚀 Live Demo</a>**
 
+---
+
+## ⚡ DEVELOPMENT STATUS — Still in Development
+
+**Last Update:** May 29, 2026  
+**YC Readiness Score:** 7/10 (Up from 4/10 after P0 fixes)
+
+### ✅ Completed
+- [x] 4 authentication systems (recruiter, candidate, public, admin)
+- [x] Voice interview with adaptive AI conversation
+- [x] Assessment generation and reporting
+- [x] Recruiter dashboard with analytics
+- [x] Bulk candidate management & CSV import
+- [x] Database auto-seeding (test accounts on startup)
+- [x] Root URL landing page with system overview
+
+### 📋 Next Steps (Priority Order)
+
+**Today:**
+- [ ] Test production at https://ai-tutor-screener-29ln.onrender.com/ (Render redeploy in progress)
+- [ ] Verify all 4 systems work on production
+- [ ] Demo to early testers
+
+**This Week (1-2 days):**
+- [ ] Add password reset UI on login pages
+- [ ] Add recruiter self-signup form (`/register`)
+- [ ] Remove test credentials from landing page (move to docs)
+- [ ] Improve error messages on dashboard API failures
+
+**Before Investor Demo:**
+- [ ] Test email delivery on Render (bulk invite emails must send)
+- [ ] Admin account management UI improvements
+- [ ] Full end-to-end testing with audio
+- [ ] Polish UX (loading states, better error handling)
+- [ ] Review all docs in `docs/` folder for audit findings
+
+**See Full Details:** Read `docs/TESTING_SUMMARY.md`, `docs/AUDIT_REPORT.md`, and `docs/FIX_COMPLETION_REPORT.md` for detailed findings and next steps.
+
+---
+
 > [!IMPORTANT]
 > **Reviewer Notes:**
 > - **Browser:** Use **Chrome or Edge** for the full voice experience (Web Speech live preview).

@@ -3,11 +3,8 @@ __pycache__/
 *.py[oc]
 build/
 dist/
-docs/
 wheels/
 *.egg-info
-docs/
-
 
 # Virtual environments
 .venv
