@@ -104,7 +104,10 @@ from fastapi import HTTPException
 
 async def get_current_recruiter(user: User = Depends(current_active_user)) -> User:
     """Dependency to check if the user is a recruiter or superuser."""
-    if getattr(user, "role", "recruiter") != "recruiter" and not user.is_superuser:
+    user_role = getattr(user, "role", "recruiter")
+    print(f"[Auth] get_current_recruiter called: email={user.email}, role={user_role}, is_superuser={user.is_superuser}")
+    if user_role != "recruiter" and not user.is_superuser:
+        print(f"[Auth] 403 - User {user.email} has role={user_role}, denying access")
         raise HTTPException(
             status_code=403,
             detail="Forbidden: Only recruiters can access this resource."
