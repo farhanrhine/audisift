@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ai-tutor-screener
+    name: audisift
     env: python
     plan: free
     buildCommand: pip install uv && uv sync

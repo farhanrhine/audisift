@@ -1,4 +1,4 @@
-# AI Candidate Screener — Full Upgrade Plan
+# Audisift — Full Upgrade Plan
 ## For Claude Code Execution
 
 > **Goal:** Transform the current prototype into a production-grade, real-world hiring tool.
@@ -37,7 +37,7 @@ Replace all raw SQL with SQLAlchemy models. Keep the same table structure but ad
 
 **Connection string logic in `config.py`:**
 ```python
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./screener.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./audisift.db")
 
 # Fix Render's legacy postgres:// URL format
 if DATABASE_URL.startswith("postgres://"):
@@ -416,7 +416,7 @@ After each phase:
 
 ```env
 # Database
-DATABASE_URL=sqlite+aiosqlite:///./screener.db   # local default
+DATABASE_URL=sqlite+aiosqlite:///./audisift.db   # local default
 
 # AI Models (Groq)
 GROQ_API_KEY=your_groq_api_key

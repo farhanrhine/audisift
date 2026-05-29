@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for AI Tutor Screener."""
+"""SQLAlchemy ORM models for Audisift."""
 
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean

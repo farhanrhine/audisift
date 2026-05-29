@@ -12,7 +12,7 @@ ASSESSMENT_MODEL   = os.getenv("ASSESSMENT_MODEL",   "llama-3.3-70b-versatile")
 WHISPER_MODEL      = os.getenv("WHISPER_MODEL",       "whisper-large-v3-turbo")
 
 # --- Database (SQLAlchemy) ---
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./screener.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./audisift.db")
 
 # Fix Render's legacy postgres:// URL format
 if DATABASE_URL.startswith("postgres://"):

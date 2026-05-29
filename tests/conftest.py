@@ -4,7 +4,7 @@ import asyncio
 import sys
 
 # Set test environment variables BEFORE importing backend modules
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_screener.db"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_audisift.db"
 os.environ["SECRET_KEY"] = "test-secret-key-at-least-32-characters-long-required-for-jwt-needs-to-be-long"
 os.environ["GROQ_API_KEY"] = "mock_groq_key_for_testing"
 
@@ -34,9 +34,9 @@ async def setup_db():
         await conn.run_sync(Base.metadata.drop_all)
     
     # Remove test database file if it exists
-    if os.path.exists("./test_screener.db"):
+    if os.path.exists("./test_audisift.db"):
         try:
-            os.remove("./test_screener.db")
+            os.remove("./test_audisift.db")
         except PermissionError:
             pass
 

@@ -1,7 +1,7 @@
 import sqlite3
 
 # Connect to database
-conn = sqlite3.connect('screener.db')
+conn = sqlite3.connect('audisift.db')
 cursor = conn.cursor()
 
 # Promote recruiter@test.com to superuser

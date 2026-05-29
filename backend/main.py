@@ -144,7 +144,7 @@ async def session_cleanup_loop():
             print(f"[Cleanup Error] {e}")
 
 
-app = FastAPI(title="AI Candidate Screener", lifespan=lifespan)
+app = FastAPI(title="Audisift", lifespan=lifespan)
 
 # --- Rate Limiting ---
 limiter = Limiter(key_func=get_remote_address)
@@ -1000,7 +1000,7 @@ async def send_bulk_invitations_task(candidates_to_email: list[dict], base_url: 
         
         success = await send_email(
             recipient=email,
-            subject="Invitation to AI Candidate Screener Interview",
+            subject="Invitation to Audisift Interview",
             html_content=html
         )
         

@@ -1,4 +1,4 @@
-"""AI Tutor Screener backend package."""
+"""Audisift backend package."""
 
 import os
 import sys

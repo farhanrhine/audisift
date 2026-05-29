@@ -1,4 +1,4 @@
-# AI Candidate Screener
+# Audisift
 ## Adaptive Voice Interview System for Job Candidate Assessment
 
 > A production-grade, voice-first screening engine designed to evaluate candidate communication, structured explanation, and teamwork through high-fidelity adaptive conversation.
@@ -201,7 +201,7 @@ Each dimension gets a score (1–10), a one-sentence justification, and a **dire
 ## Project Structure
 
 ```
-ai-tutor-screener/
+audisift/
 ├── backend/
 │   ├── main.py           # FastAPI routes + /api/transcribe (Whisper) + serves frontend
 │   ├── conversation.py   # Dynamic InterviewEngine — LLM-driven, dimension-tracking
@@ -258,8 +258,8 @@ ASSESSMENT_MODEL=llama-3.3-70b-versatile
 WHISPER_MODEL=whisper-large-v3-turbo
 
 # Database (default: SQLite for local dev, PostgreSQL for production)
-DATABASE_URL=./screener.db
-# DATABASE_URL=postgresql+asyncpg://user:password@localhost/screener  # Production
+DATABASE_URL=./audisift.db
+# DATABASE_URL=postgresql+asyncpg://user:password@localhost/audisift  # Production
 
 # Email notifications (optional, graceful fallback if not set)
 # SMTP_HOST=smtp.gmail.com
@@ -466,7 +466,7 @@ NOTIFICATION_EMAIL=your_email@gmail.com
    - Go to your [Google Account Settings](https://myaccount.google.com/).
    - Ensure **2-Step Verification** is enabled for your Google account.
    - Search for **"App passwords"** in the settings search bar.
-   - Select "Other (custom name)" from the app list, name it *AI Candidate Screener*, and click **Generate**.
+   - Select "Other (custom name)" from the app list, name it *Audisift*, and click **Generate**.
    - Copy the 16-character passcode it generates (e.g., `abcd efgh ijkl mnop`) and paste it as the `SMTP_PASSWORD` value in your `.env` file (remove any spaces so it's a single 16-letter string: `abcdefghijklmnop`).
 5. **NOTIFICATION_EMAIL**: Set to your email address where you want to receive generated bulk interview links.
 

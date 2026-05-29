@@ -1,5 +1,5 @@
 [project]
-name = "ai-tutor-screener"
+name = "audisift"
 version = "0.1.0"
 description = "An AI-powered voice interview system for evaluating job candidates with adaptive assessment across multiple dimensions."
 readme = "README.md"

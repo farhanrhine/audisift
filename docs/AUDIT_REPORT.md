@@ -234,7 +234,7 @@ Dashboard Message: Failed to load data. Is the server running?
 
 **Fix:** Better error UX:
 ```
-"Email or password incorrect. New to AI Screener? Create an account →"
+"Email or password incorrect. New to Audisift? Create an account →"
 ```
 
 ---

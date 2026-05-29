@@ -99,7 +99,7 @@ def assessment_complete_email(
             </p>
           </div>
           <div class="footer">
-            <p>AI Candidate Screener</p>
+            <p>Audisift</p>
           </div>
         </div>
       </body>
@@ -168,7 +168,7 @@ def bulk_links_email(
             </p>
           </div>
           <div class="footer">
-            <p>AI Candidate Screener</p>
+            <p>Audisift</p>
           </div>
         </div>
       </body>
@@ -231,7 +231,7 @@ def candidate_invite_email(
             </p>
           </div>
           <div class="footer">
-            <p>AI Candidate Screener</p>
+            <p>Audisift</p>
           </div>
         </div>
       </body>
