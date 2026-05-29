@@ -1111,14 +1111,6 @@ async def change_issue_status(issue_id: int, req: UpdateIssueStatusRequest, curr
 
 
 # --- Landing Page (Onboarding) ---
-@app.get("/")
-async def landing_page():
-    """Serve the landing/onboarding page that shows all 4 login systems."""
-    from fastapi.responses import FileResponse
-    home_file = Path(__file__).parent.parent / "frontend" / "home.html"
-    if home_file.exists():
-        return FileResponse(home_file, media_type="text/html")
-    raise HTTPException(status_code=404, detail="Home page not found")
 
 
 # --- Serve Frontend Static Files (must be LAST) ---
