@@ -14,7 +14,7 @@ dependencies = [
     "groq>=1.2.0",
     "langchain-core>=1.4.0",
     "langgraph>=1.2.0",
-    "msvc-runtime>=14.44.35112",
+    "msvc-runtime>=14.44.35112; sys_platform == 'win32'",
     "passlib>=1.7.4",
     "python-dotenv>=1.2.2",
     "python-jose>=3.5.0",
