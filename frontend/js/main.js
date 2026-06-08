@@ -147,6 +147,10 @@ async function startInterview() {
     if (navProg) navProg.style.display = 'flex';
     if (navTimer) navTimer.style.display = 'block';
 
+    // Hide End Interview button until at least one answer is given
+    const endBtn = document.getElementById('end-btn');
+    if (endBtn) endBtn.style.display = 'none';
+
     startTimer();
     UI.updateProgress(1, MAX_QUESTIONS);
 
@@ -348,6 +352,12 @@ async function sendAnswer(text) {
     questionCount++;
     UI.updateProgress(questionCount + 1, MAX_QUESTIONS);
 
+    // Reveal End Interview button after first real answer
+    if (questionCount === 1) {
+      const endBtn = document.getElementById('end-btn');
+      if (endBtn) endBtn.style.display = '';
+    }
+
     if (data.interview_complete) {
       await showAriaMessage(data.interviewer_response, false);
       setProcessing(true); // Maintain lock during transition
@@ -442,13 +452,18 @@ function autoEndInterview() {
 }
 
 function confirmEndInterview() {
+  // Don't allow ending before any answers — there's nothing to assess
+  if (questionCount === 0) {
+    alert('Please answer at least one question before ending the interview.');
+    return;
+  }
   if (isRecording) {
     clearTimeout(silenceTimer);
     isRecording = false;
     Audio.stopRecordingSession();
     UI.setMicRecordingUI(false);
   }
-  if (confirm('End the interview early? Your assessment will be generated from answers so far.')) {
+  if (confirm('End the interview early? Your assessment will be generated from the answers you have given so far.')) {
     sendAnswer('[Candidate chose to end interview early]');
   }
 }
