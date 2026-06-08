@@ -19,12 +19,16 @@ let interviewToken = null;
 
 let currentUser = null;
 
-// Initialize
+// Initialize — guard against double-init (ES module readyState race)
+let _initialized = false;
 async function init() {
+  if (_initialized) return;
+  _initialized = true;
+
   const urlParams = new URLSearchParams(window.location.search);
   interviewToken = urlParams.get('token');
 
-  // Enforce auth check
+  // Auth check — pre-fill fields for logged-in candidates
   try {
     currentUser = await checkAuth();
     if (currentUser.role === 'candidate') {
@@ -42,7 +46,7 @@ async function init() {
       }
     }
   } catch (e) {
-    // If not authenticated, proceed as anonymous candidate
+    // Not authenticated — proceed as anonymous candidate
     console.log("Not authenticated, proceeding as anonymous candidate.");
   }
 
@@ -53,18 +57,10 @@ async function init() {
   }
 
   const nameInput = document.getElementById('candidate-name');
-  if (nameInput) {
-    nameInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') startInterview();
-    });
-  }
+  if (nameInput) nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startInterview(); });
 
   const emailInput = document.getElementById('candidate-email');
-  if (emailInput) {
-    emailInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') startInterview();
-    });
-  }
+  if (emailInput) emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startInterview(); });
 
   if (!Audio.hasSpeechAPI) {
     const textFallback = document.getElementById('text-fallback');
@@ -75,15 +71,10 @@ async function init() {
     if (micLabel) micLabel.textContent = 'Type your answer below';
   }
 
-  // Listen for enter key on input box
   const textInput = document.getElementById('text-input');
-  if (textInput) {
-    textInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendTextAnswer();
-    });
-  }
+  if (textInput) textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendTextAnswer(); });
 
-  // Programmatic event listener bindings to prevent HTML inline scope issues
+  // Bind all interactive elements programmatically
   const startBtn = document.getElementById('start-btn');
   if (startBtn) startBtn.addEventListener('click', startInterview);
 
@@ -100,11 +91,9 @@ async function init() {
   if (sendTextBtn) sendTextBtn.addEventListener('click', sendTextAnswer);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+// Run on DOMContentLoaded or immediately if DOM is already ready
+document.addEventListener('DOMContentLoaded', init);
+if (document.readyState !== 'loading') init();
 
 function setProcessing(val) {
   isProcessing = val;

@@ -11,6 +11,16 @@
 
   // CSS Styles Injection
   const styles = `
+    /* ---- @media print: hide feedback widget entirely ---- */
+    @media print {
+      .feedback-fab,
+      .feedback-overlay,
+      .feedback-modal {
+        display: none !important;
+        visibility: hidden !important;
+      }
+    }
+
     /* Floating Action Button (FAB) */
     .feedback-fab {
       position: fixed;
