@@ -4,9 +4,26 @@ import csv
 import io
 import uuid
 import secrets
+import platform
+import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
+
+# Fix for DLL loading issues on Windows (e.g. greenlet dependency of SQLAlchemy)
+if platform.system() == "Windows":
+    base_dir = Path(__file__).resolve().parent.parent
+    venv_dir = base_dir / ".venv"
+    if venv_dir.exists():
+        try:
+            os.add_dll_directory(str(venv_dir))
+            scripts_dir = venv_dir / "Scripts"
+            if scripts_dir.exists():
+                os.add_dll_directory(str(scripts_dir))
+        except Exception as e:
+            print(f"[DLL Init Warning] Failed to register DLL directory: {e}", file=sys.stderr)
+
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Depends, Query, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -438,9 +455,12 @@ async def websocket_transcribe(websocket: WebSocket, session_id: str):
 @app.get("/api/session/report/{session_id}")
 async def get_report(
     session_id: str,
-    current_user: User = Depends(get_current_recruiter)
+    current_user: User | None = Depends(current_active_user_optional)
 ):
     """Get interview report (recruiter only)."""
+    if current_user and getattr(current_user, "role", None) == "candidate":
+        raise HTTPException(status_code=403, detail="Candidates are not allowed to view reports.")
+
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")

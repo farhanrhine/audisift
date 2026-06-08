@@ -21,7 +21,15 @@ elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 # --- Authentication (JWT) ---
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+import secrets
+DEFAULT_DEV_KEY = "dev-secret-key-change-in-production-use-openssl-rand-hex-32"
+SECRET_KEY = os.getenv("SECRET_KEY", DEFAULT_DEV_KEY)
+
+# Auto-generate a secure key on startup if using the default dev key or if it is empty
+if SECRET_KEY == DEFAULT_DEV_KEY or SECRET_KEY == "your-secret-key-change-this-in-production" or not SECRET_KEY:
+    print("[Config] WARNING: Using auto-generated SECRET_KEY on startup. Active recruiter sessions will log out on server restart.")
+    SECRET_KEY = secrets.token_hex(32)
+
 JWT_LIFETIME_SECONDS = int(os.getenv("JWT_LIFETIME_SECONDS", "86400"))  # 24 hours
 
 # --- Email Notifications (optional) ---

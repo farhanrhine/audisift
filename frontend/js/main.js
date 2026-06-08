@@ -42,9 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   } catch (e) {
-    // If not authenticated, redirect to candidate login
-    window.location.href = 'candidate_login.html';
-    return;
+    // If not authenticated, proceed as anonymous candidate
+    console.log("Not authenticated, proceeding as anonymous candidate.");
   }
 
   const isSupported = /Chrome|Chromium|Edg/.test(navigator.userAgent);

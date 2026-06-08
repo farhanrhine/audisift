@@ -232,7 +232,7 @@
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:16px;">
-      <a href="dashboard.html" class="btn btn-ghost" style="padding:8px 16px">
+      <a id="nav-dashboard-link" href="dashboard.html" class="btn btn-ghost" style="padding:8px 16px; display:none;">
         <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;margin-right:-4px;"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Dashboard
       </a>
@@ -323,7 +323,7 @@
           <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           Copy Link
         </button>
-        <a href="index.html" class="btn btn-ghost">
+        <a href="interview.html" class="btn btn-ghost">
           <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Interview
         </a>
@@ -352,28 +352,28 @@ function scoreClass(score) {
 }
 
 async function initReport() {
+  const sid = getSessionId();
+  if (!sid) {
+    window.location.href = 'login.html';
+    return;
+  }
+
   try {
     const user = await checkAuth();
-    if (user.is_superuser) {
-      const adminLink = document.getElementById('nav-admin-link');
-      if (adminLink) adminLink.style.display = 'inline-flex';
+    if (user) {
+      if (user.is_superuser) {
+        const adminLink = document.getElementById('nav-admin-link');
+        if (adminLink) adminLink.style.display = 'inline-flex';
+      }
+      if (user.role === 'recruiter' || user.is_superuser) {
+        const dashLink = document.getElementById('nav-dashboard-link');
+        if (dashLink) dashLink.style.display = 'inline-flex';
+      }
     }
-    if (user.role !== 'recruiter' && !user.is_superuser) {
-      document.body.innerHTML = `
-        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--paper); font-family: var(--font-body); padding: 20px;">
-          <div style="max-width: 400px; text-align: center;">
-            <h1 class="font-display" style="color: var(--danger); font-size: 2rem; margin-bottom: 12px;">Access Denied</h1>
-            <p style="color: var(--ink-soft); margin-bottom: 24px;">Only recruiters are authorized to view candidate assessment reports.</p>
-            <a href="login.html" class="btn btn-primary" style="text-decoration:none;">Sign in as Recruiter</a>
-          </div>
-        </div>
-      `;
-      return;
-    }
-    loadReport();
   } catch (e) {
-    window.location.href = 'login.html';
+    console.log("Viewing public report (not authenticated as recruiter)");
   }
+  loadReport();
 }
 
 async function loadReport() {

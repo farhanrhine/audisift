@@ -227,9 +227,8 @@ document.getElementById('candidateLoginForm').addEventListener('submit', async (
     await login(email, password);
     const user = await checkAuth();
     
-    // Allow candidates to go to index.html to start interview
-    // Recruiters who accidentally sign in here can also go there, but it's mainly for candidates
-    window.location.href = 'index.html';
+    // Allow candidates to go to interview.html to start interview
+    window.location.href = 'interview.html';
   } catch (err) {
     errorMsg.textContent = err.message || 'Login failed. Please verify your credentials.';
     errorMsg.style.display = 'block';
