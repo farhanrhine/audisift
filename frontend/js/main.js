@@ -20,7 +20,7 @@ let interviewToken = null;
 let currentUser = null;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', async () => {
+async function init() {
   const urlParams = new URLSearchParams(window.location.search);
   interviewToken = urlParams.get('token');
 
@@ -82,7 +82,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (e.key === 'Enter') sendTextAnswer();
     });
   }
-});
+
+  // Programmatic event listener bindings to prevent HTML inline scope issues
+  const startBtn = document.getElementById('start-btn');
+  if (startBtn) startBtn.addEventListener('click', startInterview);
+
+  const micBtn = document.getElementById('mic-btn');
+  if (micBtn) micBtn.addEventListener('click', toggleMic);
+
+  const sendEarlyBtn = document.getElementById('send-early-btn');
+  if (sendEarlyBtn) sendEarlyBtn.addEventListener('click', stopRecording);
+
+  const endBtn = document.getElementById('end-btn');
+  if (endBtn) endBtn.addEventListener('click', confirmEndInterview);
+
+  const sendTextBtn = document.querySelector('#text-fallback button');
+  if (sendTextBtn) sendTextBtn.addEventListener('click', sendTextAnswer);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 function setProcessing(val) {
   isProcessing = val;
