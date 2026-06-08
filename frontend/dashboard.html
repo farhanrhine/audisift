@@ -402,8 +402,20 @@ async function loadSessions() {
       }
 
       const actionHtml = s.status === 'completed'
-        ? `<a href="report.html?session_id=${s.id}" class="btn btn-ghost" style="padding:6px 14px; font-size:0.82rem">View Report →</a>`
-        : '<span style="font-size:0.85rem; color:var(--ink-muted); font-weight:500;">In progress…</span>';
+        ? `<div style="display:flex; gap:8px; align-items:center;">
+            <a href="report.html?session_id=${s.id}" class="btn btn-ghost" style="padding:6px 14px; font-size:0.82rem">View Report &rarr;</a>
+            <button onclick="retrySession('${s.id}')" class="btn btn-ghost" style="padding:6px 10px; font-size:0.82rem; display:inline-flex; align-items:center; justify-content:center;" title="Invite to retake interview / retry">
+              <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:14px;height:14px;margin-right:0;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.73-2.73"/></svg>
+              Retry
+            </button>
+          </div>`
+        : `<div style="display:flex; gap:8px; align-items:center;">
+            <span style="font-size:0.85rem; color:var(--ink-muted); font-weight:500;">In progress&hellip;</span>
+            <button onclick="retrySession('${s.id}')" class="btn btn-ghost" style="padding:6px 10px; font-size:0.82rem; display:inline-flex; align-items:center; justify-content:center;" title="Invite to retake interview / retry">
+              <svg viewBox="0 0 24 24" fill="none" class="icon" style="width:14px;height:14px;margin-right:0;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.73-2.73"/></svg>
+              Retry
+            </button>
+          </div>`;
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -470,6 +482,34 @@ async function exportCSV() {
   } catch (err) {
     console.error('CSV export error:', err);
     alert('Failed to export CSV. Make sure you are logged in.');
+  }
+}
+
+async function retrySession(sessionId) {
+  if (!confirm("Are you sure you want to invite this candidate to retake the interview? This will send a new email invitation or generate a new access token.")) {
+    return;
+  }
+  
+  try {
+    const res = await authFetch(`/api/sessions/${sessionId}/retry`, {
+      method: 'POST'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    
+    if (data.status === 'email_queued') {
+      alert("A new interview invite has been successfully queued for the candidate's email.");
+    } else if (data.status === 'link_generated') {
+      navigator.clipboard.writeText(data.link).then(() => {
+        alert(`No candidate email is associated. A new interview link has been generated and copied to your clipboard:\n\n${data.link}`);
+      }).catch(() => {
+        alert(`No candidate email is associated. A new interview link has been generated:\n\n${data.link}`);
+      });
+    }
+    loadSessions();
+  } catch (err) {
+    console.error(err);
+    alert("Failed to trigger interview retry. Please verify you are logged in.");
   }
 }
 

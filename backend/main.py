@@ -471,6 +471,8 @@ async def get_report(
 
     report_data = json.loads(assessment.report_json)
     report_data["candidate_email"] = session.candidate_email
+    if session.created_at and session.completed_at:
+        report_data["duration_seconds"] = int((session.completed_at - session.created_at).total_seconds())
     return {"status": "ready", "report": report_data}
 
 
@@ -669,7 +671,7 @@ async def export_sessions_csv(
     recommendation: str = Query(None),
 ):
     """
-    Export sessions as CSV file (recruiter only).
+    Export sessions as CSV file with dimension scores (recruiter only - QW-5).
     Supports optional filtering by status and recommendation.
     """
     owner_id = None if current_user.is_superuser else current_user.id
@@ -680,6 +682,19 @@ async def export_sessions_csv(
         rec_lower = recommendation.lower().strip()
         sessions_list = [s for s in sessions_list if s.recommendation and s.recommendation.lower().strip() == rec_lower]
     
+    # Pre-fetch all assessments to avoid lazy-loading DetachedInstanceError
+    from sqlalchemy import select
+    from models import Assessment
+    try:
+        from backend.database import AsyncSessionLocal
+    except ImportError:
+        from database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Assessment))
+        assessments = res.scalars().all()
+        assessment_map = {a.session_id: a for a in assessments}
+
     # Build CSV in memory
     output = io.StringIO()
     writer = csv.writer(output)
@@ -692,11 +707,35 @@ async def export_sessions_csv(
         "Status",
         "Overall Score",
         "Recommendation",
+        "Communication Clarity",
+        "Collaboration & Teamwork",
+        "Structured Explanation",
+        "English Fluency",
+        "Role & Culture Fit",
         "Session ID"
     ])
     
     # Rows
     for s in sessions_list:
+        comm = ""
+        collab = ""
+        struct = ""
+        fluency = ""
+        fit = ""
+        
+        assessment = assessment_map.get(s.id)
+        if assessment and assessment.report_json:
+            try:
+                rep = json.loads(assessment.report_json)
+                dims = rep.get("dimensions", {})
+                comm = dims.get("communication_clarity", {}).get("score", "")
+                collab = dims.get("warmth_and_patience", {}).get("score", "")
+                struct = dims.get("ability_to_simplify", {}).get("score", "")
+                fluency = dims.get("english_fluency", {}).get("score", "")
+                fit = dims.get("candidate_fit", {}).get("score", "")
+            except Exception:
+                pass
+                
         writer.writerow([
             s.candidate_name or "",
             s.candidate_email or "",
@@ -704,6 +743,11 @@ async def export_sessions_csv(
             s.status or "",
             s.overall_score or "",
             s.recommendation or "",
+            comm,
+            collab,
+            struct,
+            fluency,
+            fit,
             s.id or ""
         ])
     
@@ -730,6 +774,10 @@ async def get_full_report(
     if not assessment:
         return {"status": "generating"}
 
+    report_data = json.loads(assessment.report_json)
+    if session.created_at and session.completed_at:
+        report_data["duration_seconds"] = int((session.completed_at - session.created_at).total_seconds())
+
     return {
         "status": "ready",
         "session": {
@@ -738,8 +786,130 @@ async def get_full_report(
             "candidate_email": session.candidate_email,
             "created_at": session.created_at.isoformat(),
         },
-        "report": json.loads(assessment.report_json),
+        "report": report_data,
     }
+
+
+class ShareReportRequest(BaseModel):
+    email: str
+
+
+@app.post("/api/sessions/{session_id}/retry")
+async def retry_session(
+    session_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_recruiter),
+):
+    """Let recruiter send a new invite if candidate had technical issues (QW-4)."""
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    from sqlalchemy import select
+    from models import User as DBUser
+    
+    # Handle both module import styles
+    try:
+        from backend.database import AsyncSessionLocal, create_bulk_link
+    except ImportError:
+        from database import AsyncSessionLocal, create_bulk_link
+
+    candidate_email = session.candidate_email
+    candidate_name = session.candidate_name
+
+    # 1. If Candidate account exists, resend invitation
+    if session.candidate_user_id:
+        async with AsyncSessionLocal() as db:
+            res = await db.execute(select(DBUser).where(DBUser.id == session.candidate_user_id))
+            cand_user = res.scalar_one_or_none()
+            if cand_user and cand_user.temp_password:
+                base_url = str(request.base_url)
+                login_url = f"{base_url}candidate_login.html"
+                html = candidate_invite_email(
+                    candidate_name=cand_user.full_name,
+                    email=cand_user.email,
+                    password=cand_user.temp_password,
+                    login_url=login_url
+                )
+                background_tasks.add_task(
+                    send_email,
+                    recipient=cand_user.email,
+                    subject="Audisift Interview Re-invite / Retry",
+                    html_content=html
+                )
+                return {"status": "email_queued", "type": "candidate_account"}
+
+    # 2. If no candidate user but we have email, generate token and email it
+    if candidate_email:
+        token = secrets.token_urlsafe(32)
+        await create_bulk_link(token, f"Retry: {candidate_name}", current_user.id)
+        base_url = str(request.base_url)
+        interview_url = f"{base_url}?token={token}"
+
+        html = f"""
+        <h2>Retake your Audisift Voice Interview</h2>
+        <p>Hi {candidate_name},</p>
+        <p>Your interviewer has requested that you retake/retry your screening interview.</p>
+        <p>Please use the link below to start your new interview session:</p>
+        <p><a href="{interview_url}" style="padding:10px 20px; background-color:#E52b50; color:#fff; text-decoration:none; border-radius:4px; display:inline-block; font-weight:bold;">Start Interview</a></p>
+        <p>If the button doesn't work, copy and paste this link: {interview_url}</p>
+        """
+        background_tasks.add_task(
+            send_email,
+            recipient=candidate_email,
+            subject="Action Required: Retry your Audisift Interview",
+            html_content=html
+        )
+        return {"status": "email_queued", "type": "token_link", "link": interview_url}
+
+    # 3. If no email, just generate token link for recruiter to copy
+    token = secrets.token_urlsafe(32)
+    await create_bulk_link(token, f"Retry: {candidate_name}", current_user.id)
+    base_url = str(request.base_url)
+    interview_url = f"{base_url}?token={token}"
+    return {"status": "link_generated", "type": "no_email", "link": interview_url}
+
+
+@app.post("/api/sessions/{session_id}/share-email")
+async def share_report_email(
+    session_id: str,
+    req: ShareReportRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_recruiter),
+):
+    """Share assessment report with Hiring Manager via email (QW-6)."""
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    base_url = str(request.base_url)
+    report_url = f"{base_url}report.html?session_id={session_id}"
+
+    score_str = f"{session.overall_score:.1f}/10" if session.overall_score else "N/A"
+    rec_str = session.recommendation or "Pending"
+
+    html = f"""
+    <h2>Audisift Candidate Assessment Report</h2>
+    <p>Hi,</p>
+    <p>Recruiter {current_user.full_name} ({current_user.email}) has shared a candidate assessment report with you.</p>
+    <p><strong>Candidate:</strong> {session.candidate_name}</p>
+    {f"<p><strong>Email:</strong> {session.candidate_email}</p>" if session.candidate_email else ""}
+    <p><strong>Overall Score:</strong> {score_str}</p>
+    <p><strong>Recommendation:</strong> {rec_str}</p>
+    <p>Please click the link below to view the full report including the interview transcript and dimension breakdown:</p>
+    <p><a href="{report_url}" style="padding:10px 20px; background-color:#E52b50; color:#fff; text-decoration:none; border-radius:4px; display:inline-block; font-weight:bold;">View Assessment Report</a></p>
+    <p>If the button doesn't work, copy and paste this link: {report_url}</p>
+    """
+
+    background_tasks.add_task(
+        send_email,
+        recipient=req.email.strip(),
+        subject=f"Audisift Report Shared: {session.candidate_name}",
+        html_content=html
+    )
+    return {"status": "shared_email_queued"}
 
 
 @app.delete("/api/sessions/{session_id}")

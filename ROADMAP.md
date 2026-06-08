@@ -1,6 +1,4 @@
 # Audisift — Product Roadmap & Improvement Plan
-> Inspired by analysis of Career-Ops (career-ops.org) open source project.  
-> Career-Ops serves job-seekers. Audisift serves recruiters. This roadmap adapts their best ideas to the recruiter side of the hiring funnel.
 
 **Last Updated:** June 2026  
 **Current Version:** 1.0.0  
@@ -225,15 +223,15 @@ POST to Slack / Notion / Greenhouse / Lever when:
 
 ## Quick Wins (Can ship in hours, not days)
 
-| # | Feature | File | Description |
-|---|---------|------|-------------|
-| QW-1 | Score letter grade | `report.html` | Show A/B/C/D/F grade alongside score number (A = 8+, B = 6–8, C = 4–6, D = 2–4, F = <2) |
-| QW-2 | Interview share link | `report.html` | One-click copy of candidate's interview link to share with colleagues |
-| QW-3 | Session duration in report | `report.html` | Show total interview duration (already tracked via timer) |
-| QW-4 | Retry interview button | `dashboard.html` | Let recruiter send a new invite if candidate had technical issues |
-| QW-5 | CSV export with scores | `dashboard.html` | Export session list with all dimension scores, not just metadata |
-| QW-6 | Email report to HM | `report.html` | One-click email the report URL to a hiring manager email address |
-| QW-7 | Dark mode report PDF | `report.html` | Toggle between light/dark PDF export |
+| # | Feature | File | Description | Status |
+|---|---------|------|-------------|--------|
+| QW-1 | Score letter grade | `report.html` | Show A/B/C/D/F grade alongside score number (A = 8+, B = 6–8, C = 4–6, D = 2–4, F = <2) | ✅ Completed |
+| QW-2 | Interview share link | `report.html` | One-click copy of candidate's interview link to share with colleagues | ✅ Completed |
+| QW-3 | Session duration in report | `report.html` | Show total interview duration (already tracked via timer) | ✅ Completed |
+| QW-4 | Retry interview button | `dashboard.html` | Let recruiter send a new invite if candidate had technical issues | ✅ Completed |
+| QW-5 | CSV export with scores | `dashboard.html` | Export session list with all dimension scores, not just metadata | ✅ Completed |
+| QW-6 | Email report to HM | `report.html` | One-click email the report URL to a hiring manager email address | ✅ Completed |
+| QW-7 | Dark mode report PDF | `report.html` | Toggle between light/dark PDF export | ✅ Completed |
 
 ---
 

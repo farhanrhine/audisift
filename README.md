@@ -21,6 +21,7 @@
 - [x] **Owner Admin Panel:** Dedicated analytics page to monitor platform usage metrics and manage recruiter/candidate feedback issues.
 - [x] **Automatic Database Seeding:** Ready-to-test mock credentials created on container/startup.
 - [x] **Robust Local & CI Test Suite:** SQLite & PostgreSQL async DB compatibility with PEP 508 multi-platform packaging hooks.
+- [x] **Quick Wins Checklist:** Letter-grade score scaling (A-F), duration calculation tracking, copyable interview share links, one-click email report sharing with Hiring Managers, Retry/Resend buttons on Recruiter Dashboard, detailed multi-dimension CSV exports, and Dark Mode PDF print stylesheets.
 
 ### 🗺️ Future Roadmap
 We have laid out a comprehensive multi-phase product roadmap mapping next-generation capabilities (Role Archetypes, STAR Story Extraction, human prep kits, side-by-side comparison matrices, pre-interview CV parsing, etc.).
