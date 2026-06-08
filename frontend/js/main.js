@@ -91,9 +91,12 @@ async function init() {
   if (sendTextBtn) sendTextBtn.addEventListener('click', sendTextAnswer);
 }
 
-// Run on DOMContentLoaded or immediately if DOM is already ready
-document.addEventListener('DOMContentLoaded', init);
-if (document.readyState !== 'loading') init();
+// Strictly exclusive: only one path fires init(), never both
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 function setProcessing(val) {
   isProcessing = val;
